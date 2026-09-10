@@ -1,6 +1,7 @@
 -- ============================================================
--- RedupePanel v2.0 - DELTA EXECUTOR EDITION
--- Panel redupe buat scripting di Roblox (jalan di Delta!)
+-- RedupePanel v3.0 - DELTA EXECUTOR EDITION
+-- Panel redupe buat scripting di Roblox
+-- Fitur: Draggable, Save to File, 4 Mode Pattern
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -43,7 +44,7 @@ tombolR.Size = UDim2.new(0, 44, 0, 44)
 tombolR.Position = UDim2.new(0, 10, 0, 90)
 tombolR.Parent = gui
 tombolR.Active = true
-tombolR.Draggable = true -- Delta support Draggable
+tombolR.Draggable = true
 
 local crR = Instance.new("UICorner")
 crR.CornerRadius = UDim.new(0, 12)
@@ -56,7 +57,7 @@ panel.Position = UDim2.new(1, -260, 0.5, -210)
 panel.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
 panel.BorderSizePixel = 0
 panel.Active = true
-panel.Draggable = true
+panel.Draggable = true -- Bisa digeser langsung dari panel
 panel.Parent = gui
 
 local crP = Instance.new("UICorner")
@@ -69,7 +70,7 @@ stP.Thickness = 1
 stP.Transparency = 0.4
 stP.Parent = panel
 
--- Title
+-- Title (handle drag)
 local title = Instance.new("TextLabel")
 title.BackgroundTransparency = 1
 title.Position = UDim2.new(0, 10, 0, 0)
@@ -78,7 +79,7 @@ title.Font = Enum.Font.GothamBold
 title.TextSize = 15
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.TextXAlignment = Enum.TextXAlignment.Left
-title.Text = "🔧 Redupe Panel v2.0"
+title.Text = "🔧 Redupe Panel v3.0"
 title.Active = true
 title.Parent = panel
 
@@ -102,7 +103,9 @@ layI.Padding = UDim.new(0, 4)
 layI.SortOrder = Enum.SortOrder.LayoutOrder
 layI.Parent = isi
 
--- Helper functions
+-- ============================================================
+-- HELPER FUNCTIONS
+-- ============================================================
 local no = 0
 local function urut()
     no = no + 1
@@ -239,7 +242,7 @@ hapusBtn.Text = "🗑️ Hapus Hasil"
 gayaTombol(hapusBtn, Color3.fromRGB(180, 50, 50))
 hapusBtn.Parent = isi
 
--- Tombol Save (KHUSUS DELTA!)
+-- Tombol save
 local saveBtn = Instance.new("TextButton")
 saveBtn.Size = UDim2.new(1, -20, 0, 30)
 saveBtn.LayoutOrder = urut()
@@ -350,7 +353,7 @@ local function jalan(mode)
 end
 
 -- ============================================================
--- FITUR SAVE (KHUSUS DELTA!)
+-- SAVE KE FILE (KHUSUS DELTA)
 -- ============================================================
 local function saveHasil()
     if #hasil == 0 then
@@ -363,7 +366,6 @@ local function saveHasil()
         return
     end
 
-    -- Serialize ke JSON
     local data = {
         total = #hasil,
         timestamp = os.date("%Y-%m-%d %H:%M:%S"),
@@ -446,33 +448,47 @@ tombolR.MouseButton1Click:Connect(function()
 end)
 
 -- ============================================================
--- DRAG PANEL (Delta compatible)
+-- DRAG PANEL (STABIL DI DELTA)
 -- ============================================================
-local geser, mulai, awal = false, nil, nil
+local dragging = false
+local dragInput, dragStart, startPos
+
+local function update(input)
+    local delta = input.Position - dragStart
+    panel.Position = UDim2.new(
+        startPos.X.Scale,
+        startPos.X.Offset + delta.X,
+        startPos.Y.Scale,
+        startPos.Y.Offset + delta.Y
+    )
+end
+
 title.InputBegan:Connect(function(input)
-    local t = input.UserInputType
-    if t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.Touch then
-        geser, mulai, awal = true, input.Position, panel.Position
+    if input.UserInputType == Enum.UserInputType.MouseButton1 
+    or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = panel.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
     end
 end)
+
+title.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement 
+    or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
 UIS.InputChanged:Connect(function(input)
-    if geser then
-        local t = input.UserInputType
-        if t == Enum.UserInputType.MouseMovement or t == Enum.UserInputType.Touch then
-            local d = input.Position - mulai
-            panel.Position = UDim2.new(awal.X.Scale, awal.X.Offset + d.X, awal.Y.Scale, awal.Y.Offset + d.Y)
-        end
+    if input == dragInput and dragging then
+        update(input)
     end
 end)
-UIS.InputEnded:Connect(function(input)
-    local t = input.UserInputType
-    if t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.Touch then geser = false end
-end)
 
--- ============================================================
--- LOADSTRING SUPPORT (KHUSUS DELTA!)
--- ============================================================
--- Kalo script ini di-host di GitHub, bisa di-load pake:
--- loadstring(game:HttpGet("URL_SCRIPT"))()
-
-print("[Redupe] ✅ Panel v2.0 Delta Edition jalan!")
+print("[Redupe] ✅ Panel v3.0 Delta Edition jalan! Draggable aktif.")
