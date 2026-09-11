@@ -1,9 +1,8 @@
 -- ============================================================
--- Gabung Part v3.1 (diperbaiki)
--- UI v3.0 dipertahankan, mesin gabung/pisah dibenerin:
--- gabung pakai UnionAsync beneran, pisah pakai Separate().
--- Mode "MeshPart" dicabut karena mustahil (part tidak bisa
--- diubah jadi mesh). Buat scripting bawaan Studio Lite.
+-- Gabung Part v3.2
+-- v3.1 + tampilkan ERROR ASLI UnionAsync (diagnosis),
+-- anti-spam, anti-ngancurin-karakter, + Grup Model/Bubar.
+-- Buat scripting bawaan Studio Lite.
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -39,8 +38,8 @@ crM.CornerRadius = UDim.new(0, 12)
 crM.Parent = tombolM
 
 local panel = Instance.new("Frame")
-panel.Size = UDim2.new(0, 260, 0, 340)
-panel.Position = UDim2.new(1, -270, 0.5, -170)
+panel.Size = UDim2.new(0, 260, 0, 368)
+panel.Position = UDim2.new(1, -270, 0.5, -184)
 panel.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
 panel.BorderSizePixel = 0
 panel.Active = true
@@ -230,6 +229,20 @@ resetBtn.Text = "Reset"
 gayaTombol(resetBtn, Color3.fromRGB(120, 120, 130))
 resetBtn.Parent = rPisah
 
+local rGrup = baris(30)
+local grupBtn = Instance.new("TextButton")
+grupBtn.Size = UDim2.new(0.5, -3, 0, 30)
+grupBtn.LayoutOrder = 1
+grupBtn.Text = "Grup Model"
+gayaTombol(grupBtn, Color3.fromRGB(0, 170, 200))
+grupBtn.Parent = rGrup
+local bubarBtn = Instance.new("TextButton")
+bubarBtn.Size = UDim2.new(0.5, -3, 0, 30)
+bubarBtn.LayoutOrder = 2
+bubarBtn.Text = "Bubar"
+gayaTombol(bubarBtn, Color3.fromRGB(100, 110, 140))
+bubarBtn.Parent = rGrup
+
 local statusLabel = buatLabel("Pilih part, Gabung!", 18)
 
 -- ===== LOGIKA =====
@@ -237,6 +250,7 @@ local dipilih = {}
 local tandai = {}
 local milih = false
 local spawnList = {}
+local sibuk = false
 
 local function status(t)
     statusLabel.Text = t
@@ -327,10 +341,18 @@ end
 -- ============================================================
 -- GABUNG (UnionAsync beneran - hasilnya union kelihatan)
 -- ============================================================
+local function milikKarakter(o)
+    local m = o:FindFirstAncestorWhichIsA("Model")
+    if m ~= nil and m:FindFirstChildOfClass("Humanoid") ~= nil then
+        return true
+    end
+    return false
+end
+
 local function gabung()
     local valid = {}
     for _, o in pairs(dipilih) do
-        if o ~= nil and o.Parent ~= nil and o:IsA("BasePart") then
+        if o ~= nil and o.Parent ~= nil and o:IsA("BasePart") and not milikKarakter(o) then
             table.insert(valid, o)
         end
     end
@@ -338,6 +360,11 @@ local function gabung()
         status("Pilih minimal 2 part dulu.")
         return
     end
+    if sibuk then
+        status("Tunggu, lagi ngitung...")
+        return
+    end
+    sibuk = true
     status("Menggabungkan " .. #valid .. " part...")
     local utama = valid[1]
     local lain = {}
@@ -346,7 +373,10 @@ local function gabung()
         return utama:UnionAsync(lain)
     end)
     if not ok or hasilUnion == nil then
-        status("Gagal gabung. Coba part lain.")
+        sibuk = false
+        local emsg = tostring(hasilUnion)
+        print("[Gabung] ERROR ASLI: " .. emsg)
+        status("Gagal: " .. emsg:sub(1, 48))
         return
     end
     hasilUnion.Name = "Gabungan"
@@ -355,6 +385,7 @@ local function gabung()
     for _, o in pairs(valid) do
         pcall(function() o:Destroy() end)
     end
+    sibuk = false
     reset()
     tambah(hasilUnion)
     status(#valid .. " part jadi 1 Union!")
@@ -366,7 +397,7 @@ end
 local function gabungCopy()
     local valid = {}
     for _, o in pairs(dipilih) do
-        if o ~= nil and o.Parent ~= nil and o:IsA("BasePart") then
+        if o ~= nil and o.Parent ~= nil and o:IsA("BasePart") and not milikKarakter(o) then
             table.insert(valid, o)
         end
     end
@@ -374,6 +405,11 @@ local function gabungCopy()
         status("Pilih minimal 2 part dulu.")
         return
     end
+    if sibuk then
+        status("Tunggu, lagi ngitung...")
+        return
+    end
+    sibuk = true
     status("Nge-copy + gabung " .. #valid .. " part...")
     local klon = {}
     for _, o in pairs(valid) do
@@ -392,7 +428,10 @@ local function gabungCopy()
         for _, c in pairs(klon) do
             pcall(function() c:Destroy() end)
         end
-        status("Gagal gabung. Coba part lain.")
+        sibuk = false
+        local emsg = tostring(hasilUnion)
+        print("[Gabung] ERROR ASLI: " .. emsg)
+        status("Gagal: " .. emsg:sub(1, 48))
         return
     end
     hasilUnion.Name = "Gabungan_Copy"
@@ -401,6 +440,7 @@ local function gabungCopy()
     for _, c in pairs(klon) do
         pcall(function() c:Destroy() end)
     end
+    sibuk = false
     reset()
     tambah(hasilUnion)
     status("Union copy jadi, asli utuh!")
@@ -427,7 +467,9 @@ local function pisah()
         return o:Separate()
     end)
     if not ok or hasilPisah == nil then
-        status("Gagal pisah.")
+        local emsg = tostring(hasilPisah)
+        print("[Gabung] ERROR ASLI: " .. emsg)
+        status("Gagal: " .. emsg:sub(1, 48))
         return
     end
     reset()
@@ -436,6 +478,63 @@ local function pisah()
         tambah(p)
     end
     status("Dipisah jadi " .. #hasilPisah .. " part.")
+end
+
+local function grup()
+    local valid = {}
+    for _, o in pairs(dipilih) do
+        if o ~= nil and o.Parent ~= nil and o:IsA("BasePart") and not milikKarakter(o) then
+            table.insert(valid, o)
+        end
+    end
+    if #valid < 1 then
+        status("Pilih part dulu.")
+        return
+    end
+    local m = Instance.new("Model")
+    m.Name = "Grup_" .. #valid
+    m.Parent = Workspace
+    for _, o in pairs(valid) do
+        o.Parent = m
+    end
+    pcall(function() m.PrimaryPart = valid[1] end)
+    reset()
+    status(#valid .. " part jadi 1 Model!")
+end
+
+local function bubar()
+    if #dipilih < 1 then
+        status("Pilih 1 part dalam grup dulu.")
+        return
+    end
+    local o = dipilih[1]
+    if o == nil or o.Parent == nil then
+        status("Objek gak ada.")
+        return
+    end
+    local m = o.Parent
+    if m == nil or m == Workspace or not m:IsA("Model") then
+        status("Itu bukan isi grup.")
+        return
+    end
+    if m:FindFirstChildOfClass("Humanoid") ~= nil then
+        status("Itu karakter! Batal.")
+        return
+    end
+    local isi = {}
+    for _, c in pairs(m:GetChildren()) do
+        table.insert(isi, c)
+    end
+    for _, c in pairs(isi) do
+        c.Parent = Workspace
+    end
+    local n = #isi
+    m:Destroy()
+    reset()
+    for _, c in pairs(isi) do
+        if c:IsA("BasePart") then tambah(c) end
+    end
+    status("Grup dibubarkan (" .. n .. " isi).")
 end
 
 -- ===== EVENT =====
@@ -479,6 +578,8 @@ end)
 
 gabungBtn.MouseButton1Click:Connect(function() gabung() end)
 copyBtn.MouseButton1Click:Connect(function() gabungCopy() end)
+grupBtn.MouseButton1Click:Connect(function() grup() end)
+bubarBtn.MouseButton1Click:Connect(function() bubar() end)
 pisahBtn.MouseButton1Click:Connect(function() pisah() end)
 resetBtn.MouseButton1Click:Connect(function()
     reset()
@@ -531,4 +632,4 @@ UIS.InputChanged:Connect(function(input)
     end
 end)
 
-print("[Gabung] Panel v3.1 jalan!")
+print("[Gabung] Panel v3.2 jalan!")
