@@ -1,13 +1,16 @@
 -- ============================================================
--- Gabung Part v3.2
--- v3.1 + tampilkan ERROR ASLI UnionAsync (diagnosis),
--- anti-spam, anti-ngancurin-karakter, + Grup Model/Bubar.
--- Buat scripting bawaan Studio Lite.
+-- Gabung Part v3.3
+-- Gabung pakai GeometryService:UnionAsync (API baru yang
+-- BISA jalan di LocalScript/client). part:UnionAsync yang
+-- lama hanya bisa dari server. Buat scripting bawaan
+-- Studio Lite.
 -- ============================================================
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local UIS = game:GetService("UserInputService")
+local GeometryService = nil
+pcall(function() GeometryService = game:GetService("GeometryService") end)
 local LocalPlayer = Players.LocalPlayer
 if LocalPlayer == nil then return end
 local mouse = LocalPlayer:GetMouse()
@@ -61,7 +64,7 @@ title.Font = Enum.Font.GothamBold
 title.TextSize = 15
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.TextXAlignment = Enum.TextXAlignment.Left
-title.Text = "🔧 Gabung Part v3.1"
+title.Text = "🔧 Gabung Part v3.3"
 title.Active = true
 title.Parent = panel
 
@@ -360,6 +363,10 @@ local function gabung()
         status("Pilih minimal 2 part dulu.")
         return
     end
+    if GeometryService == nil or GeometryService.UnionAsync == nil then
+        status("API Union tidak ada di sini.")
+        return
+    end
     if sibuk then
         status("Tunggu, lagi ngitung...")
         return
@@ -369,26 +376,35 @@ local function gabung()
     local utama = valid[1]
     local lain = {}
     for i = 2, #valid do table.insert(lain, valid[i]) end
-    local ok, hasilUnion = pcall(function()
-        return utama:UnionAsync(lain)
+    local ok, hasilArr = pcall(function()
+        return GeometryService:UnionAsync(utama, lain, {SplitApart = false})
     end)
-    if not ok or hasilUnion == nil then
+    if not ok then
         sibuk = false
-        local emsg = tostring(hasilUnion)
+        local emsg = tostring(hasilArr)
         print("[Gabung] ERROR ASLI: " .. emsg)
         status("Gagal: " .. emsg:sub(1, 48))
         return
     end
-    hasilUnion.Name = "Gabungan"
-    hasilUnion.Anchored = true
-    hasilUnion.Parent = Workspace
+    if hasilArr == nil or #hasilArr == 0 then
+        sibuk = false
+        status("Gagal: hasil kosong.")
+        return
+    end
+    for _, u in pairs(hasilArr) do
+        u.Name = "Gabungan"
+        u.Anchored = true
+        u.Parent = Workspace
+    end
     for _, o in pairs(valid) do
         pcall(function() o:Destroy() end)
     end
     sibuk = false
     reset()
-    tambah(hasilUnion)
-    status(#valid .. " part jadi 1 Union!")
+    for _, u in pairs(hasilArr) do
+        tambah(u)
+    end
+    status(#valid .. " part jadi " .. #hasilArr .. " Union!")
 end
 
 -- ============================================================
@@ -403,6 +419,10 @@ local function gabungCopy()
     end
     if #valid < 2 then
         status("Pilih minimal 2 part dulu.")
+        return
+    end
+    if GeometryService == nil or GeometryService.UnionAsync == nil then
+        status("API Union tidak ada di sini.")
         return
     end
     if sibuk then
@@ -421,28 +441,40 @@ local function gabungCopy()
     local utama = klon[1]
     local lain = {}
     for i = 2, #klon do table.insert(lain, klon[i]) end
-    local ok, hasilUnion = pcall(function()
-        return utama:UnionAsync(lain)
+    local ok, hasilArr = pcall(function()
+        return GeometryService:UnionAsync(utama, lain, {SplitApart = false})
     end)
-    if not ok or hasilUnion == nil then
+    if not ok then
         for _, c in pairs(klon) do
             pcall(function() c:Destroy() end)
         end
         sibuk = false
-        local emsg = tostring(hasilUnion)
+        local emsg = tostring(hasilArr)
         print("[Gabung] ERROR ASLI: " .. emsg)
         status("Gagal: " .. emsg:sub(1, 48))
         return
     end
-    hasilUnion.Name = "Gabungan_Copy"
-    hasilUnion.Anchored = true
-    hasilUnion.Parent = Workspace
+    if hasilArr == nil or #hasilArr == 0 then
+        for _, c in pairs(klon) do
+            pcall(function() c:Destroy() end)
+        end
+        sibuk = false
+        status("Gagal: hasil kosong.")
+        return
+    end
+    for _, u in pairs(hasilArr) do
+        u.Name = "Gabungan_Copy"
+        u.Anchored = true
+        u.Parent = Workspace
+    end
     for _, c in pairs(klon) do
         pcall(function() c:Destroy() end)
     end
     sibuk = false
     reset()
-    tambah(hasilUnion)
+    for _, u in pairs(hasilArr) do
+        tambah(u)
+    end
     status("Union copy jadi, asli utuh!")
 end
 
@@ -632,4 +664,4 @@ UIS.InputChanged:Connect(function(input)
     end
 end)
 
-print("[Gabung] Panel v3.2 jalan!")
+print("[Gabung] Panel v3.3 jalan!")
