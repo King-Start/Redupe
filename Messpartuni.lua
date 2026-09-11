@@ -1,6 +1,9 @@
 -- ============================================================
--- MeshUnionPanel v3.0 - DELTA EXECUTOR EDITION
--- Gabung part jadi 1 (MeshPart atau UnionOperation)
+-- Gabung Part v3.1 (diperbaiki)
+-- UI v3.0 dipertahankan, mesin gabung/pisah dibenerin:
+-- gabung pakai UnionAsync beneran, pisah pakai Separate().
+-- Mode "MeshPart" dicabut karena mustahil (part tidak bisa
+-- diubah jadi mesh). Buat scripting bawaan Studio Lite.
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -36,8 +39,8 @@ crM.CornerRadius = UDim.new(0, 12)
 crM.Parent = tombolM
 
 local panel = Instance.new("Frame")
-panel.Size = UDim2.new(0, 260, 0, 400)
-panel.Position = UDim2.new(1, -270, 0.5, -200)
+panel.Size = UDim2.new(0, 260, 0, 340)
+panel.Position = UDim2.new(1, -270, 0.5, -170)
 panel.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
 panel.BorderSizePixel = 0
 panel.Active = true
@@ -59,7 +62,7 @@ title.Font = Enum.Font.GothamBold
 title.TextSize = 15
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.TextXAlignment = Enum.TextXAlignment.Left
-title.Text = "🔧 Gabung Part v3.0"
+title.Text = "🔧 Gabung Part v3.1"
 title.Active = true
 title.Parent = panel
 
@@ -199,22 +202,19 @@ buatLabel("-- GABUNG JADI 1 PART --", 16)
 local hitungLabel = buatLabel("Dipilih: 0", 18)
 local pilihBtn = tombolFull("Pilih Part", Color3.fromRGB(30, 120, 220), 32)
 
--- Pilihan tipe gabung
-local rTipe = baris(32)
-local tipeMesh = Instance.new("TextButton")
-tipeMesh.Size = UDim2.new(0.5, -3, 0, 32)
-tipeMesh.LayoutOrder = 1
-tipeMesh.Text = "MeshPart"
-gayaTombol(tipeMesh, Color3.fromRGB(120, 80, 200))
-tipeMesh.Parent = rTipe
-local tipeUnion = Instance.new("TextButton")
-tipeUnion.Size = UDim2.new(0.5, -3, 0, 32)
-tipeUnion.LayoutOrder = 2
-tipeUnion.Text = "UnionOperation"
-gayaTombol(tipeUnion, Color3.fromRGB(30, 140, 90))
-tipeUnion.Parent = rTipe
-
-local gabungBtn = tombolFull("Gabung Jadi 1 Part!", Color3.fromRGB(30, 140, 90), 32)
+local rGabung = baris(32)
+local gabungBtn = Instance.new("TextButton")
+gabungBtn.Size = UDim2.new(0.5, -3, 0, 32)
+gabungBtn.LayoutOrder = 1
+gabungBtn.Text = "Gabung!"
+gayaTombol(gabungBtn, Color3.fromRGB(30, 140, 90))
+gabungBtn.Parent = rGabung
+local copyBtn = Instance.new("TextButton")
+copyBtn.Size = UDim2.new(0.5, -3, 0, 32)
+copyBtn.LayoutOrder = 2
+copyBtn.Text = "Gabung Copy"
+gayaTombol(copyBtn, Color3.fromRGB(30, 170, 170))
+copyBtn.Parent = rGabung
 
 local rPisah = baris(30)
 local pisahBtn = Instance.new("TextButton")
@@ -230,14 +230,13 @@ resetBtn.Text = "Reset"
 gayaTombol(resetBtn, Color3.fromRGB(120, 120, 130))
 resetBtn.Parent = rPisah
 
-local statusLabel = buatLabel("Pilih part → Gabung!", 18)
+local statusLabel = buatLabel("Pilih part, Gabung!", 18)
 
 -- ===== LOGIKA =====
 local dipilih = {}
 local tandai = {}
 local milih = false
 local spawnList = {}
-local tipeGabung = "mesh" -- default MeshPart
 
 local function status(t)
     statusLabel.Text = t
@@ -326,7 +325,7 @@ local function spawnMesh()
 end
 
 -- ============================================================
--- GABUNG JADI 1 PART (WORK DI DELTA!)
+-- GABUNG (UnionAsync beneran - hasilnya union kelihatan)
 -- ============================================================
 local function gabung()
     local valid = {}
@@ -339,70 +338,76 @@ local function gabung()
         status("Pilih minimal 2 part dulu.")
         return
     end
-    
-    status("Menggabungkan " .. #valid .. " part jadi " .. tipeGabung .. "...")
-    
-    -- Hitung bounding box (posisi, ukuran)
-    local minPos = valid[1].Position
-    local maxPos = valid[1].Position
-    for _, p in pairs(valid) do
-        local pos = p.Position
-        local size = p.Size
-        minPos = Vector3.new(
-            math.min(minPos.X, pos.X - size.X/2),
-            math.min(minPos.Y, pos.Y - size.Y/2),
-            math.min(minPos.Z, pos.Z - size.Z/2)
-        )
-        maxPos = Vector3.new(
-            math.max(maxPos.X, pos.X + size.X/2),
-            math.max(maxPos.Y, pos.Y + size.Y/2),
-            math.max(maxPos.Z, pos.Z + size.Z/2)
-        )
-    end
-    
-    local center = (minPos + maxPos) / 2
-    local size = maxPos - minPos
-    
-    -- Cek bounding box (jangan kegedean)
-    if size.X > 2048 or size.Y > 2048 or size.Z > 2048 then
-        status("Part terlalu besar (maks 2048).")
+    status("Menggabungkan " .. #valid .. " part...")
+    local utama = valid[1]
+    local lain = {}
+    for i = 2, #valid do table.insert(lain, valid[i]) end
+    local ok, hasilUnion = pcall(function()
+        return utama:UnionAsync(lain)
+    end)
+    if not ok or hasilUnion == nil then
+        status("Gagal gabung. Coba part lain.")
         return
     end
-    
-    local hasil
-    if tipeGabung == "mesh" then
-        -- Bikin MeshPart
-        hasil = Instance.new("MeshPart")
-        hasil.Name = "Gabungan_Mesh"
-        hasil.MeshId = "rbxassetid://0" -- Kosong, bisa diisi user
-        hasil.Size = size
-        hasil.Position = center
-        hasil.Anchored = true
-        hasil.CanCollide = false
-        hasil.Parent = Workspace
-    else
-        -- Bikin UnionOperation (kotak yang nutup semua part)
-        hasil = Instance.new("UnionOperation")
-        hasil.Name = "Gabungan_Union"
-        hasil.Size = size
-        hasil.Position = center
-        hasil.Anchored = true
-        hasil.CanCollide = false
-        hasil.Parent = Workspace
+    hasilUnion.Name = "Gabungan"
+    hasilUnion.Anchored = true
+    hasilUnion.Parent = Workspace
+    for _, o in pairs(valid) do
+        pcall(function() o:Destroy() end)
     end
-    
-    -- Hapus part asli
-    for _, p in pairs(valid) do
-        pcall(function() p:Destroy() end)
-    end
-    
     reset()
-    tambah(hasil)
-    status(#valid .. " part jadi 1 " .. tipeGabung .. "!")
+    tambah(hasilUnion)
+    status(#valid .. " part jadi 1 Union!")
 end
 
 -- ============================================================
--- PISAH (DELTA GAK SUPPORT SEPARATE, JADI MANUAL)
+-- GABUNG COPY (asli utuh, yang digabung copy-annya)
+-- ============================================================
+local function gabungCopy()
+    local valid = {}
+    for _, o in pairs(dipilih) do
+        if o ~= nil and o.Parent ~= nil and o:IsA("BasePart") then
+            table.insert(valid, o)
+        end
+    end
+    if #valid < 2 then
+        status("Pilih minimal 2 part dulu.")
+        return
+    end
+    status("Nge-copy + gabung " .. #valid .. " part...")
+    local klon = {}
+    for _, o in pairs(valid) do
+        local c = o:Clone()
+        c.Parent = Workspace
+        c.Anchored = true
+        table.insert(klon, c)
+    end
+    local utama = klon[1]
+    local lain = {}
+    for i = 2, #klon do table.insert(lain, klon[i]) end
+    local ok, hasilUnion = pcall(function()
+        return utama:UnionAsync(lain)
+    end)
+    if not ok or hasilUnion == nil then
+        for _, c in pairs(klon) do
+            pcall(function() c:Destroy() end)
+        end
+        status("Gagal gabung. Coba part lain.")
+        return
+    end
+    hasilUnion.Name = "Gabungan_Copy"
+    hasilUnion.Anchored = true
+    hasilUnion.Parent = Workspace
+    for _, c in pairs(klon) do
+        pcall(function() c:Destroy() end)
+    end
+    reset()
+    tambah(hasilUnion)
+    status("Union copy jadi, asli utuh!")
+end
+
+-- ============================================================
+-- PISAH (Separate beneran - balik jadi part asli)
 -- ============================================================
 local function pisah()
     if #dipilih ~= 1 then
@@ -414,30 +419,23 @@ local function pisah()
         status("Objek gak ada.")
         return
     end
-    
-    -- Bikin 2 part dari 1 part gabungan (contoh)
-    local pos = o.Position
-    local size = o.Size
-    
-    local p1 = Instance.new("Part")
-    p1.Name = "Pisah_1"
-    p1.Size = Vector3.new(size.X/2, size.Y, size.Z)
-    p1.Position = pos + Vector3.new(-size.X/4, 0, 0)
-    p1.Anchored = true
-    p1.Parent = Workspace
-    
-    local p2 = Instance.new("Part")
-    p2.Name = "Pisah_2"
-    p2.Size = Vector3.new(size.X/2, size.Y, size.Z)
-    p2.Position = pos + Vector3.new(size.X/4, 0, 0)
-    p2.Anchored = true
-    p2.Parent = Workspace
-    
-    o:Destroy()
+    if not o:IsA("UnionOperation") then
+        status("Itu bukan Union.")
+        return
+    end
+    local ok, hasilPisah = pcall(function()
+        return o:Separate()
+    end)
+    if not ok or hasilPisah == nil then
+        status("Gagal pisah.")
+        return
+    end
     reset()
-    tambah(p1)
-    tambah(p2)
-    status("Dipisah jadi 2 part.")
+    for _, p in pairs(hasilPisah) do
+        if p:IsA("BasePart") then p.Anchored = true end
+        tambah(p)
+    end
+    status("Dipisah jadi " .. #hasilPisah .. " part.")
 end
 
 -- ===== EVENT =====
@@ -458,22 +456,8 @@ pilihBtn.MouseButton1Click:Connect(function()
         status("Tap part (tap lagi = batal).")
     else
         pilihBtn.Text = "Pilih Part"
-        status("Pilih part → Gabung!")
+        status("Pilih part, Gabung!")
     end
-end)
-
-tipeMesh.MouseButton1Click:Connect(function()
-    tipeGabung = "mesh"
-    tipeMesh.BackgroundColor3 = Color3.fromRGB(120, 80, 200)
-    tipeUnion.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
-    status("Tipe: MeshPart")
-end)
-
-tipeUnion.MouseButton1Click:Connect(function()
-    tipeGabung = "union"
-    tipeUnion.BackgroundColor3 = Color3.fromRGB(30, 140, 90)
-    tipeMesh.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
-    status("Tipe: UnionOperation")
 end)
 
 UIS.InputBegan:Connect(function(input, gp)
@@ -494,6 +478,7 @@ UIS.InputBegan:Connect(function(input, gp)
 end)
 
 gabungBtn.MouseButton1Click:Connect(function() gabung() end)
+copyBtn.MouseButton1Click:Connect(function() gabungCopy() end)
 pisahBtn.MouseButton1Click:Connect(function() pisah() end)
 resetBtn.MouseButton1Click:Connect(function()
     reset()
@@ -519,12 +504,12 @@ local function update(input)
 end
 
 title.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 
+    if input.UserInputType == Enum.UserInputType.MouseButton1
     or input.UserInputType == Enum.UserInputType.Touch then
         dragging = true
         dragStart = input.Position
         startPos = panel.Position
-        
+
         input.Changed:Connect(function()
             if input.UserInputState == Enum.UserInputState.End then
                 dragging = false
@@ -534,7 +519,7 @@ title.InputBegan:Connect(function(input)
 end)
 
 title.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement 
+    if input.UserInputType == Enum.UserInputType.MouseMovement
     or input.UserInputType == Enum.UserInputType.Touch then
         dragInput = input
     end
@@ -546,4 +531,4 @@ UIS.InputChanged:Connect(function(input)
     end
 end)
 
-print("[Gabung] ✅ Panel v3.0 Delta Edition jalan!")
+print("[Gabung] Panel v3.1 jalan!")
