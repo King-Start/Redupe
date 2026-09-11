@@ -1,9 +1,8 @@
 -- ============================================================
--- Gabung Part v3.3
--- Gabung pakai GeometryService:UnionAsync (API baru yang
--- BISA jalan di LocalScript/client). part:UnionAsync yang
--- lama hanya bisa dari server. Buat scripting bawaan
--- Studio Lite.
+-- Gabung Part v3.5 (+ Lubangi!)
+-- v3.4 + tombol Lubangi (GeometryService:SubtractAsync):
+-- part PERTAMA = main (kuning), sisanya = pelubang.
+-- Buat scripting bawaan Studio Lite.
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -41,8 +40,8 @@ crM.CornerRadius = UDim.new(0, 12)
 crM.Parent = tombolM
 
 local panel = Instance.new("Frame")
-panel.Size = UDim2.new(0, 260, 0, 368)
-panel.Position = UDim2.new(1, -270, 0.5, -184)
+panel.Size = UDim2.new(0, 260, 0, 404)
+panel.Position = UDim2.new(1, -270, 0.5, -202)
 panel.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
 panel.BorderSizePixel = 0
 panel.Active = true
@@ -64,7 +63,7 @@ title.Font = Enum.Font.GothamBold
 title.TextSize = 15
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.TextXAlignment = Enum.TextXAlignment.Left
-title.Text = "🔧 Gabung Part v3.3"
+title.Text = "🔧 Gabung Part v3.5"
 title.Active = true
 title.Parent = panel
 
@@ -218,6 +217,8 @@ copyBtn.Text = "Gabung Copy"
 gayaTombol(copyBtn, Color3.fromRGB(30, 170, 170))
 copyBtn.Parent = rGabung
 
+local lubangiBtn = tombolFull("Lubangi! (1 = main)", Color3.fromRGB(210, 60, 140), 32)
+
 local rPisah = baris(30)
 local pisahBtn = Instance.new("TextButton")
 pisahBtn.Size = UDim2.new(0.5, -3, 0, 30)
@@ -257,11 +258,14 @@ local sibuk = false
 
 local function status(t)
     statusLabel.Text = t
-    print("[Gabung] " .. t)
 end
 
 local function refreshHitung()
-    hitungLabel.Text = "Dipilih: " .. #dipilih
+    if #dipilih == 0 then
+        hitungLabel.Text = "Dipilih: 0"
+    else
+        hitungLabel.Text = "Main: " .. dipilih[1].Name .. " +" .. (#dipilih - 1)
+    end
 end
 
 local function adaDi(o)
@@ -271,18 +275,34 @@ local function adaDi(o)
     return nil
 end
 
-local function tambah(o)
-    table.insert(dipilih, o)
+local function kasihTandai(o, pertama)
     pcall(function()
         local h = Instance.new("Highlight")
         h.Name = "GabungTandai"
         h.Adornee = o
-        h.FillColor = Color3.fromRGB(60, 220, 60)
+        local warna = Color3.fromRGB(60, 220, 60)
+        if pertama then warna = Color3.fromRGB(255, 220, 60) end
+        h.FillColor = warna
         h.FillTransparency = 0.7
-        h.OutlineColor = Color3.fromRGB(60, 220, 60)
+        h.OutlineColor = warna
         h.Parent = gui
         tandai[o] = h
     end)
+end
+
+local function catUlang()
+    for o, h in pairs(tandai) do
+        pcall(function() h:Destroy() end)
+    end
+    tandai = {}
+    for i, o in pairs(dipilih) do
+        kasihTandai(o, i == 1)
+    end
+end
+
+local function tambah(o)
+    table.insert(dipilih, o)
+    kasihTandai(o, #dipilih == 1)
     refreshHitung()
     status(o.Name .. " dipilih (" .. #dipilih .. ").")
 end
@@ -290,7 +310,7 @@ end
 local function buang(o)
     local i = adaDi(o)
     if i ~= nil then table.remove(dipilih, i) end
-    if tandai[o] ~= nil then tandai[o]:Destroy() tandai[o] = nil end
+    catUlang()
     refreshHitung()
 end
 
@@ -569,6 +589,62 @@ local function bubar()
     status("Grup dibubarkan (" .. n .. " isi).")
 end
 
+local function lubangi()
+    local valid = {}
+    for _, o in pairs(dipilih) do
+        if o ~= nil and o.Parent ~= nil and o:IsA("BasePart") and not milikKarakter(o) then
+            table.insert(valid, o)
+        end
+    end
+    if #valid < 2 then
+        status("Pilih main + pelubang dulu.")
+        return
+    end
+    if GeometryService == nil or GeometryService.SubtractAsync == nil then
+        status("API Lubang tidak ada di sini.")
+        return
+    end
+    if sibuk then
+        status("Tunggu, lagi ngitung...")
+        return
+    end
+    sibuk = true
+    local namaMain = valid[1].Name
+    status("Ngelubangi " .. namaMain .. "...")
+    local utama = valid[1]
+    local lain = {}
+    for i = 2, #valid do table.insert(lain, valid[i]) end
+    local ok, hasilArr = pcall(function()
+        return GeometryService:SubtractAsync(utama, lain, {SplitApart = false})
+    end)
+    if not ok then
+        sibuk = false
+        local emsg = tostring(hasilArr)
+        print("[Gabung] ERROR ASLI: " .. emsg)
+        status("Gagal: " .. emsg:sub(1, 48))
+        return
+    end
+    if hasilArr == nil or #hasilArr == 0 then
+        sibuk = false
+        status("Gagal: hasil kosong.")
+        return
+    end
+    for _, u in pairs(hasilArr) do
+        u.Name = "Bolongan"
+        u.Anchored = true
+        u.Parent = Workspace
+    end
+    for _, o in pairs(valid) do
+        pcall(function() o:Destroy() end)
+    end
+    sibuk = false
+    reset()
+    for _, u in pairs(hasilArr) do
+        tambah(u)
+    end
+    status(namaMain .. " bolong! (" .. #hasilArr .. ")")
+end
+
 -- ===== EVENT =====
 spawnBtn.MouseButton1Click:Connect(function() spawnMesh() end)
 
@@ -610,6 +686,7 @@ end)
 
 gabungBtn.MouseButton1Click:Connect(function() gabung() end)
 copyBtn.MouseButton1Click:Connect(function() gabungCopy() end)
+lubangiBtn.MouseButton1Click:Connect(function() lubangi() end)
 grupBtn.MouseButton1Click:Connect(function() grup() end)
 bubarBtn.MouseButton1Click:Connect(function() bubar() end)
 pisahBtn.MouseButton1Click:Connect(function() pisah() end)
@@ -664,4 +741,4 @@ UIS.InputChanged:Connect(function(input)
     end
 end)
 
-print("[Gabung] Panel v3.3 jalan!")
+print("[Gabung] Panel v3.5 jalan!")
