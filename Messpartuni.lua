@@ -1,6 +1,8 @@
 -- ============================================================
--- Gabung Part v3.5 (+ Lubangi!)
--- v3.4 + tombol Lubangi (GeometryService:SubtractAsync):
+-- Gabung Part v3.6 (hasil runtime tampil + pulih otomatis)
+-- v3.5 + sumber CSG disimpan sebagai template:
+-- hasil client CSG memang tidak menyimpan mesh saat Save,
+-- jadi sumber tetap ada dan union dibuat ulang setiap mulai Play.
 -- part PERTAMA = main (kuning), sisanya = pelubang.
 -- Buat scripting bawaan Studio Lite.
 -- ============================================================
@@ -63,7 +65,7 @@ title.Font = Enum.Font.GothamBold
 title.TextSize = 15
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.TextXAlignment = Enum.TextXAlignment.Left
-title.Text = "🔧 Gabung Part v3.5"
+title.Text = "🔧 Gabung Part v3.6"
 title.Active = true
 title.Parent = panel
 
@@ -256,8 +258,114 @@ local milih = false
 local spawnList = {}
 local sibuk = false
 
+local milikKarakter
+
 local function status(t)
     statusLabel.Text = t
+end
+
+-- ============================================================
+-- TEMPLATE RUNTIME
+-- GeometryService di client menghasilkan PartOperation yang tampil
+-- saat Play, tetapi mesh-nya tidak ikut tersimpan ke Edit. Karena itu
+-- part sumber dipindah ke model template dan hasil dibuat ulang saat Play.
+-- ============================================================
+local SUMBER_PREFIX = "__GabungSource_"
+local HASIL_ATTR = "GabungRuntimeResult"
+local OPERASI_ATTR = "GabungOperation"
+local NAMA_ATTR = "GabungResultName"
+
+local function ambilAtribut(o, nama)
+    local ok, nilai = pcall(function()
+        return o:GetAttribute(nama)
+    end)
+    if ok then return nilai end
+    return nil
+end
+
+local function pasangAtribut(o, nama, nilai)
+    pcall(function()
+        o:SetAttribute(nama, nilai)
+    end)
+end
+
+local function hasilRuntime(o)
+    return ambilAtribut(o, HASIL_ATTR) == true
+end
+
+local function csgPart(o)
+    local namaKelas = ""
+    pcall(function() namaKelas = o.ClassName end)
+    return namaKelas == "PartOperation" or namaKelas == "UnionOperation"
+end
+
+local function sembunyikanSumber(o)
+    pcall(function()
+        o.LocalTransparencyModifier = 1
+    end)
+end
+
+local function tampilkanHasil(o)
+    pcall(function()
+        o.LocalTransparencyModifier = 0
+    end)
+end
+
+local function namaModelSumber(operasi, namaHasil)
+    return SUMBER_PREFIX .. operasi .. "_" .. namaHasil
+end
+
+local function buatModelSumber(operasi, namaHasil, sumber)
+    local model = Instance.new("Model")
+    model.Name = namaModelSumber(operasi, namaHasil)
+    pasangAtribut(model, OPERASI_ATTR, operasi)
+    pasangAtribut(model, NAMA_ATTR, namaHasil)
+    model.Parent = Workspace
+    for _, o in ipairs(sumber) do
+        if o ~= nil and o.Parent ~= nil then
+            o.Parent = model
+            sembunyikanSumber(o)
+        end
+    end
+    return model
+end
+
+local function pasangHasil(hasilArr, model, namaHasil)
+    for _, u in ipairs(hasilArr) do
+        if u ~= nil then
+            u.Name = namaHasil
+            u.Anchored = true
+            pasangAtribut(u, HASIL_ATTR, true)
+            u.Parent = model
+            tampilkanHasil(u)
+        end
+    end
+end
+
+local function simpanDanTampilkan(operasi, namaHasil, sumber, hasilArr)
+    local model = buatModelSumber(operasi, namaHasil, sumber)
+    pasangHasil(hasilArr, model, namaHasil)
+    return model
+end
+
+local function jalankanCSG(operasi, utama, lain)
+    if operasi == "Subtract" then
+        return GeometryService:SubtractAsync(utama, lain, {SplitApart = false})
+    end
+    return GeometryService:UnionAsync(utama, lain, {SplitApart = false})
+end
+
+local function kumpulkanPilihan()
+    local valid = {}
+    for _, o in ipairs(dipilih) do
+        if o ~= nil and o.Parent ~= nil and o:IsA("BasePart") and not milikKarakter(o) then
+            if hasilRuntime(o) then
+                return nil, "Hasil runtime pilihannya jangan dipakai ulang; pilih part sumbernya."
+            end
+            table.insert(valid, o)
+        end
+    end
+    return valid, nil
 end
 
 local function refreshHitung()
@@ -364,7 +472,7 @@ end
 -- ============================================================
 -- GABUNG (UnionAsync beneran - hasilnya union kelihatan)
 -- ============================================================
-local function milikKarakter(o)
+milikKarakter = function(o)
     local m = o:FindFirstAncestorWhichIsA("Model")
     if m ~= nil and m:FindFirstChildOfClass("Humanoid") ~= nil then
         return true
@@ -373,11 +481,10 @@ local function milikKarakter(o)
 end
 
 local function gabung()
-    local valid = {}
-    for _, o in pairs(dipilih) do
-        if o ~= nil and o.Parent ~= nil and o:IsA("BasePart") and not milikKarakter(o) then
-            table.insert(valid, o)
-        end
+    local valid, alasan = kumpulkanPilihan()
+    if valid == nil then
+        status(alasan)
+        return
     end
     if #valid < 2 then
         status("Pilih minimal 2 part dulu.")
@@ -397,7 +504,7 @@ local function gabung()
     local lain = {}
     for i = 2, #valid do table.insert(lain, valid[i]) end
     local ok, hasilArr = pcall(function()
-        return GeometryService:UnionAsync(utama, lain, {SplitApart = false})
+        return jalankanCSG("Union", utama, lain)
     end)
     if not ok then
         sibuk = false
@@ -411,31 +518,23 @@ local function gabung()
         status("Gagal: hasil kosong.")
         return
     end
-    for _, u in pairs(hasilArr) do
-        u.Name = "Gabungan"
-        u.Anchored = true
-        u.Parent = Workspace
-    end
-    for _, o in pairs(valid) do
-        pcall(function() o:Destroy() end)
-    end
+    simpanDanTampilkan("Union", "Gabungan", valid, hasilArr)
     sibuk = false
     reset()
-    for _, u in pairs(hasilArr) do
+    for _, u in ipairs(hasilArr) do
         tambah(u)
     end
-    status(#valid .. " part jadi " .. #hasilArr .. " Union!")
+    status(#valid .. " part jadi " .. #hasilArr .. " Union! Tampil + pulih otomatis.")
 end
 
 -- ============================================================
 -- GABUNG COPY (asli utuh, yang digabung copy-annya)
 -- ============================================================
 local function gabungCopy()
-    local valid = {}
-    for _, o in pairs(dipilih) do
-        if o ~= nil and o.Parent ~= nil and o:IsA("BasePart") and not milikKarakter(o) then
-            table.insert(valid, o)
-        end
+    local valid, alasan = kumpulkanPilihan()
+    if valid == nil then
+        status(alasan)
+        return
     end
     if #valid < 2 then
         status("Pilih minimal 2 part dulu.")
@@ -452,7 +551,7 @@ local function gabungCopy()
     sibuk = true
     status("Nge-copy + gabung " .. #valid .. " part...")
     local klon = {}
-    for _, o in pairs(valid) do
+    for _, o in ipairs(valid) do
         local c = o:Clone()
         c.Parent = Workspace
         c.Anchored = true
@@ -462,10 +561,10 @@ local function gabungCopy()
     local lain = {}
     for i = 2, #klon do table.insert(lain, klon[i]) end
     local ok, hasilArr = pcall(function()
-        return GeometryService:UnionAsync(utama, lain, {SplitApart = false})
+        return jalankanCSG("Union", utama, lain)
     end)
     if not ok then
-        for _, c in pairs(klon) do
+        for _, c in ipairs(klon) do
             pcall(function() c:Destroy() end)
         end
         sibuk = false
@@ -475,27 +574,20 @@ local function gabungCopy()
         return
     end
     if hasilArr == nil or #hasilArr == 0 then
-        for _, c in pairs(klon) do
+        for _, c in ipairs(klon) do
             pcall(function() c:Destroy() end)
         end
         sibuk = false
         status("Gagal: hasil kosong.")
         return
     end
-    for _, u in pairs(hasilArr) do
-        u.Name = "Gabungan_Copy"
-        u.Anchored = true
-        u.Parent = Workspace
-    end
-    for _, c in pairs(klon) do
-        pcall(function() c:Destroy() end)
-    end
+    simpanDanTampilkan("Union", "Gabungan_Copy", klon, hasilArr)
     sibuk = false
     reset()
-    for _, u in pairs(hasilArr) do
+    for _, u in ipairs(hasilArr) do
         tambah(u)
     end
-    status("Union copy jadi, asli utuh!")
+    status("Union copy jadi, asli utuh + pulih otomatis.")
 end
 
 -- ============================================================
@@ -511,10 +603,13 @@ local function pisah()
         status("Objek gak ada.")
         return
     end
-    if not o:IsA("UnionOperation") then
+    if not csgPart(o) then
         status("Itu bukan Union.")
         return
     end
+    local modelSumber = o.Parent
+    local modelRuntime = modelSumber ~= nil and modelSumber:IsA("Model")
+        and string.sub(modelSumber.Name, 1, #SUMBER_PREFIX) == SUMBER_PREFIX
     local ok, hasilPisah = pcall(function()
         return o:Separate()
     end)
@@ -525,9 +620,16 @@ local function pisah()
         return
     end
     reset()
-    for _, p in pairs(hasilPisah) do
-        if p:IsA("BasePart") then p.Anchored = true end
+    for _, p in ipairs(hasilPisah) do
+        if p:IsA("BasePart") then
+            p.Anchored = true
+            tampilkanHasil(p)
+            if modelRuntime then p.Parent = Workspace end
+        end
         tambah(p)
+    end
+    if modelRuntime then
+        pcall(function() modelSumber:Destroy() end)
     end
     status("Dipisah jadi " .. #hasilPisah .. " part.")
 end
@@ -590,11 +692,10 @@ local function bubar()
 end
 
 local function lubangi()
-    local valid = {}
-    for _, o in pairs(dipilih) do
-        if o ~= nil and o.Parent ~= nil and o:IsA("BasePart") and not milikKarakter(o) then
-            table.insert(valid, o)
-        end
+    local valid, alasan = kumpulkanPilihan()
+    if valid == nil then
+        status(alasan)
+        return
     end
     if #valid < 2 then
         status("Pilih main + pelubang dulu.")
@@ -615,7 +716,7 @@ local function lubangi()
     local lain = {}
     for i = 2, #valid do table.insert(lain, valid[i]) end
     local ok, hasilArr = pcall(function()
-        return GeometryService:SubtractAsync(utama, lain, {SplitApart = false})
+        return jalankanCSG("Subtract", utama, lain)
     end)
     if not ok then
         sibuk = false
@@ -629,20 +730,105 @@ local function lubangi()
         status("Gagal: hasil kosong.")
         return
     end
-    for _, u in pairs(hasilArr) do
-        u.Name = "Bolongan"
-        u.Anchored = true
-        u.Parent = Workspace
-    end
-    for _, o in pairs(valid) do
-        pcall(function() o:Destroy() end)
-    end
+    simpanDanTampilkan("Subtract", "Bolongan", valid, hasilArr)
     sibuk = false
     reset()
-    for _, u in pairs(hasilArr) do
+    for _, u in ipairs(hasilArr) do
         tambah(u)
     end
-    status(namaMain .. " bolong! (" .. #hasilArr .. ")")
+    status(namaMain .. " bolong! Tampil + pulih otomatis.")
+end
+
+-- ============================================================
+-- PULIHKAN HASIL SAAT PLAY
+-- ============================================================
+local function operasiDariModel(model)
+    local op = ambilAtribut(model, OPERASI_ATTR)
+    if op == "Union" or op == "Subtract" then return op end
+    if string.sub(model.Name, 1, #SUMBER_PREFIX + 8) == SUMBER_PREFIX .. "Subtract" then
+        return "Subtract"
+    end
+    return "Union"
+end
+
+local function namaHasilDariModel(model, operasi)
+    local nama = ambilAtribut(model, NAMA_ATTR)
+    if type(nama) == "string" and nama ~= "" then return nama end
+    if operasi == "Subtract" then return "Bolongan" end
+    return "Gabungan"
+end
+
+local function buangHasilLama(model)
+    for _, o in ipairs(model:GetChildren()) do
+        if o:IsA("BasePart") then
+            local nama = o.Name
+            if hasilRuntime(o)
+            or (csgPart(o) and (nama == "Gabungan" or nama == "Bolongan" or nama == "Gabungan_Copy")) then
+                pcall(function() o:Destroy() end)
+            end
+        end
+    end
+end
+
+local function pulihkanModel(model)
+    local operasi = operasiDariModel(model)
+    local namaHasil = namaHasilDariModel(model, operasi)
+    buangHasilLama(model)
+    local sumber = {}
+    for _, o in ipairs(model:GetChildren()) do
+        if o:IsA("BasePart") then
+            table.insert(sumber, o)
+            sembunyikanSumber(o)
+        end
+    end
+    if #sumber < 2 then return false end
+    local utama = sumber[1]
+    local lain = {}
+    for i = 2, #sumber do table.insert(lain, sumber[i]) end
+    local ok, hasilArr = pcall(function()
+        return jalankanCSG(operasi, utama, lain)
+    end)
+    if not ok then
+        local emsg = tostring(hasilArr)
+        print("[Gabung] ERROR ASLI saat pulih: " .. emsg)
+        return false
+    end
+    if hasilArr == nil or #hasilArr == 0 then return false end
+    pasangHasil(hasilArr, model, namaHasil)
+    return true
+end
+
+local function bersihkanCangkangLama()
+    for _, o in ipairs(Workspace:GetChildren()) do
+        if o:IsA("BasePart") and csgPart(o)
+        and (o.Name == "Gabungan" or o.Name == "Bolongan" or o.Name == "Gabungan_Copy")
+        and not hasilRuntime(o) then
+            pcall(function() o:Destroy() end)
+        end
+    end
+end
+
+local function pulihkanSemua()
+    if GeometryService == nil or GeometryService.UnionAsync == nil then return end
+    local daftar = {}
+    for _, o in ipairs(Workspace:GetChildren()) do
+        if o:IsA("Model")
+        and string.sub(o.Name, 1, #SUMBER_PREFIX) == SUMBER_PREFIX then
+            table.insert(daftar, o)
+        end
+    end
+    if #daftar == 0 then return end
+    sibuk = true
+    local berhasil = 0
+    for _, model in ipairs(daftar) do
+        if model.Parent ~= nil and pulihkanModel(model) then
+            berhasil = berhasil + 1
+        end
+    end
+    sibuk = false
+    if berhasil > 0 then
+        status("Pulih " .. berhasil .. " hasil CSG; sekarang tampil.")
+    end
 end
 
 -- ===== EVENT =====
@@ -741,4 +927,6 @@ UIS.InputChanged:Connect(function(input)
     end
 end)
 
-print("[Gabung] Panel v3.5 jalan!")
+print("[Gabung] Panel v3.6 jalan!")
+bersihkanCangkangLama()
+pulihkanSemua()
