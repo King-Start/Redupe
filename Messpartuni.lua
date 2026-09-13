@@ -1,8 +1,8 @@
 -- ============================================================
--- Gabung Part v3.7 (output langsung, tanpa model template)
--- Hasil Gabung/Lubangi diletakkan langsung di Workspace sebagai
--- PartOperation. PartOperation adalah class Union/CSG Roblox;
--- bukan MeshPart kecuali input CSG-nya memang MeshPart.
+-- Gabung Part v3.8 (CSG panel + PARTTOMESH companion)
+-- Hasil Gabung/Lubangi diletakkan langsung di Workspace.
+-- PARTTOMESH.rbxmx tetap berjalan sebagai tool terpisah untuk
+-- Part -> MeshPart; panel ini menangani Union dan Subtract.
 -- Buat scripting bawaan Studio Lite.
 -- ============================================================
 
@@ -64,7 +64,7 @@ title.Font = Enum.Font.GothamBold
 title.TextSize = 15
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.TextXAlignment = Enum.TextXAlignment.Left
-title.Text = "🔧 Gabung Part v3.7"
+title.Text = "🔧 Gabung Part v3.8"
 title.Active = true
 title.Parent = panel
 
@@ -373,6 +373,16 @@ local function milikKarakter(o)
     return false
 end
 
+local function daftarKelas(hasilArr)
+    local daftar = {}
+    for _, u in pairs(hasilArr) do
+        local cn = "hasil"
+        pcall(function() cn = u.ClassName end)
+        table.insert(daftar, cn)
+    end
+    return table.concat(daftar, ", ")
+end
+
 local function gabung()
     local valid = {}
     for _, o in pairs(dipilih) do
@@ -425,7 +435,7 @@ local function gabung()
     for _, u in pairs(hasilArr) do
         tambah(u)
     end
-    status(#valid .. " part jadi " .. #hasilArr .. " Union!")
+    status(#valid .. " part jadi " .. #hasilArr .. " " .. daftarKelas(hasilArr) .. ".")
 end
 
 -- ============================================================
@@ -496,7 +506,7 @@ local function gabungCopy()
     for _, u in pairs(hasilArr) do
         tambah(u)
     end
-    status("Union copy jadi, asli utuh!")
+    status("Union copy jadi: " .. daftarKelas(hasilArr) .. ", asli utuh!")
 end
 
 -- ============================================================
@@ -645,7 +655,7 @@ local function lubangi()
     for _, u in pairs(hasilArr) do
         tambah(u)
     end
-    status(namaMain .. " bolong! (" .. #hasilArr .. ")")
+    status(namaMain .. " bolong: " .. daftarKelas(hasilArr) .. ".")
 end
 
 -- ===== EVENT =====
@@ -785,6 +795,6 @@ local function bersihkanCangkangLama()
     end
 end
 
-print("[Gabung] Panel v3.7 jalan!")
+print("[Gabung] Panel v3.8 jalan!")
 bersihkanTemplateLama()
 bersihkanCangkangLama()
