@@ -1,1352 +1,989 @@
 --[[
-    AFTERLIFE PROJECT v2.0 - FULL FUNCTIONAL
-    Studio Lite + Delta Executor Edition
-    Semua fitur berfungsi!
+    RBXM Asset Hub - Studio Lite
+
+    UI bergaya asset manager: splash screen, sidebar, Dashboard, Assets,
+    Settings, filter, search, Rescan Assets, dan import native.
+
+    PENTING:
+    - Scan hanya mencari file .rbxm menggunakan listfiles(folder).
+    - Import TIDAK membongkar/membangun ulang Part.
+    - Import diserahkan langsung ke InsertService:LoadLocalAsset(path)
+      agar ukuran, CFrame, mesh, hierarchy, dan property tetap mengikuti file.
+
+    Executor yang diperlukan:
+      listfiles(folder)
+      opsional: isfolder(path) untuk scan subfolder
+
+    API Roblox/Studio Lite yang diperlukan:
+      InsertService:LoadLocalAsset(path)
 ]]
 
 local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local InsertService = game:GetService("InsertService")
-local HttpService = game:GetService("HttpService")
 local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
-if not LocalPlayer then return end
+if LocalPlayer == nil then
+    return
+end
 
-local GUI_NAME = "AfterlifeProject_v2"
+local GUI_NAME = "RBXMAssetHub_StudioLite"
+local MAX_SCAN_DEPTH = 8
+local MAX_FILES = 500
 
--- ============================================================
--- COLOR PALETTE
--- ============================================================
 local C = {
-    bg = Color3.fromRGB(13, 8, 28),
-    sidebar = Color3.fromRGB(18, 10, 38),
-    panel = Color3.fromRGB(22, 12, 45),
-    card = Color3.fromRGB(32, 18, 58),
-    card2 = Color3.fromRGB(42, 24, 72),
-    input = Color3.fromRGB(28, 16, 52),
-    purple = Color3.fromRGB(150, 70, 240),
-    purple2 = Color3.fromRGB(110, 45, 200),
-    purpleHover = Color3.fromRGB(180, 110, 255),
-    pink = Color3.fromRGB(255, 80, 180),
-    text = Color3.fromRGB(245, 240, 255),
-    muted = Color3.fromRGB(150, 130, 180),
-    dim = Color3.fromRGB(90, 75, 120),
-    green = Color3.fromRGB(90, 230, 140),
-    yellow = Color3.fromRGB(255, 210, 90),
-    red = Color3.fromRGB(255, 100, 120),
-    gold = Color3.fromRGB(255, 200, 60),
+    black = Color3.fromRGB(5, 5, 9),
+    background = Color3.fromRGB(13, 15, 23),
+    panel = Color3.fromRGB(18, 18, 27),
+    sidebar = Color3.fromRGB(9, 8, 14),
+    card = Color3.fromRGB(27, 24, 40),
+    card2 = Color3.fromRGB(33, 29, 49),
+    input = Color3.fromRGB(35, 30, 51),
+    line = Color3.fromRGB(101, 47, 141),
+    purple = Color3.fromRGB(177, 83, 246),
+    purple2 = Color3.fromRGB(122, 51, 187),
+    purpleHover = Color3.fromRGB(198, 107, 255),
+    text = Color3.fromRGB(246, 243, 252),
+    muted = Color3.fromRGB(166, 151, 183),
+    dim = Color3.fromRGB(111, 99, 127),
+    green = Color3.fromRGB(99, 222, 155),
+    yellow = Color3.fromRGB(244, 199, 96),
+    red = Color3.fromRGB(255, 105, 126),
 }
 
--- ============================================================
--- CLEANUP
--- ============================================================
 local playerGui = LocalPlayer:WaitForChild("PlayerGui")
 local oldGui = playerGui:FindFirstChild(GUI_NAME)
-if oldGui then oldGui:Destroy() end
+if oldGui ~= nil then
+    oldGui:Destroy()
+end
 
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = GUI_NAME
 screenGui.ResetOnSpawn = false
 screenGui.IgnoreGuiInset = true
-screenGui.DisplayOrder = 200
+screenGui.DisplayOrder = 120
 screenGui.Parent = playerGui
 
--- ============================================================
--- HELPERS
--- ============================================================
-local function corner(p, r)
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, r or 8)
-    c.Parent = p
-    return c
+local function corner(parent, radius)
+    local item = Instance.new("UICorner")
+    item.CornerRadius = UDim.new(0, radius)
+    item.Parent = parent
+    return item
 end
 
-local function stroke(p, color, trans, thick)
-    local s = Instance.new("UIStroke")
-    s.Color = color or C.purple2
-    s.Transparency = trans or 0.5
-    s.Thickness = thick or 1
-    s.Parent = p
-    return s
+local function stroke(parent, color, transparency, thickness)
+    local item = Instance.new("UIStroke")
+    item.Color = color
+    item.Transparency = transparency or 0
+    item.Thickness = thickness or 1
+    item.Parent = parent
+    return item
 end
 
-local function lbl(parent, text, pos, size, font, ts, color)
-    local l = Instance.new("TextLabel")
-    l.BackgroundTransparency = 1
-    l.Position = pos
-    l.Size = size
-    l.Font = font or Enum.Font.Gotham
-    l.TextSize = ts or 12
-    l.TextColor3 = color or C.text
-    l.Text = text or ""
-    l.TextXAlignment = Enum.TextXAlignment.Left
-    l.Parent = parent
-    return l
+local function label(parent, text, position, size, font, textSize, color)
+    local item = Instance.new("TextLabel")
+    item.BackgroundTransparency = 1
+    item.Position = position
+    item.Size = size
+    item.Font = font or Enum.Font.Gotham
+    item.TextSize = textSize or 12
+    item.TextColor3 = color or C.text
+    item.Text = text or ""
+    item.TextXAlignment = Enum.TextXAlignment.Left
+    item.Parent = parent
+    return item
 end
 
-local function btn(parent, text, pos, size, bg, ts)
-    local b = Instance.new("TextButton")
-    b.BackgroundColor3 = bg or C.card
-    b.BorderSizePixel = 0
-    b.Position = pos
-    b.Size = size
-    b.Font = Enum.Font.GothamBold
-    b.TextSize = ts or 11
-    b.TextColor3 = C.text
-    b.Text = text or ""
-    b.AutoButtonColor = false
-    b.Parent = parent
-    corner(b, 8)
-    return b
+local function button(parent, text, position, size, background, textSize)
+    local item = Instance.new("TextButton")
+    item.BackgroundColor3 = background or C.card
+    item.BorderSizePixel = 0
+    item.Position = position
+    item.Size = size
+    item.Font = Enum.Font.GothamBold
+    item.TextSize = textSize or 11
+    item.TextColor3 = C.text
+    item.Text = text or ""
+    item.AutoButtonColor = false
+    item.Parent = parent
+    corner(item, 8)
+    return item
 end
 
-local function hover(item, normal, over)
+local function addHover(item, normal, over)
     item.MouseEnter:Connect(function()
-        if item.Active ~= false then
-            TweenService:Create(item, TweenInfo.new(0.15), {BackgroundColor3 = over}):Play()
+        if item.Active then
+            TweenService:Create(item, TweenInfo.new(0.12), {BackgroundColor3 = over}):Play()
         end
     end)
     item.MouseLeave:Connect(function()
-        if item.Active ~= false then
-            TweenService:Create(item, TweenInfo.new(0.15), {BackgroundColor3 = normal}):Play()
+        if item.Active then
+            TweenService:Create(item, TweenInfo.new(0.12), {BackgroundColor3 = normal}):Play()
         end
     end)
 end
 
--- ============================================================
--- FILE SYSTEM FUNCTIONS
--- ============================================================
-local function getFunc(name)
-    local fn
+-- -------------------------------------------------------------------------
+-- Native file access helpers
+-- -------------------------------------------------------------------------
+local function executorFunction(name)
+    local candidate = nil
     if type(getgenv) == "function" then
         local ok, env = pcall(getgenv)
-        if ok and type(env) == "table" then fn = env[name] end
+        if ok and type(env) == "table" then
+            candidate = env[name]
+        end
     end
-    if type(fn) ~= "function" then fn = _G[name] end
-    return type(fn) == "function" and fn or nil
+    if type(candidate) ~= "function" then
+        candidate = _G[name]
+    end
+    if type(candidate) ~= "function" then
+        local ok, value = pcall(function()
+            return getfenv()[name]
+        end)
+        if ok then
+            candidate = value
+        end
+    end
+    return type(candidate) == "function" and candidate or nil
 end
 
-local function normalizePath(p)
-    p = tostring(p or ""):gsub("\\", "/"):gsub("/+", "/")
-    if #p > 1 then p = p:gsub("/$", "") end
-    return p
+local function normalizePath(path)
+    path = tostring(path or "")
+    path = path:gsub("\\", "/")
+    path = path:gsub("/+", "/")
+    if #path > 1 then
+        path = path:gsub("/$", "")
+    end
+    return path
 end
 
-local function fname(path)
+local function fileName(path)
     return tostring(path):match("([^/]+)$") or tostring(path)
 end
 
 local function isRbxm(path)
-    local l = string.lower(tostring(path))
-    return l:sub(-5) == ".rbxm" or l:sub(-6) == ".rbxmx"
+    return string.lower(tostring(path)):sub(-5) == ".rbxm"
 end
 
-local function cleanErr(msg)
-    local t = tostring(msg or "error"):gsub("^.-:%d+: ", "")
-    if #t > 150 then t = t:sub(1, 147) .. "..." end
-    return t
+local function cleanError(message)
+    local text = tostring(message or "error")
+    text = text:gsub("^.-:%d+: ", "")
+    if #text > 190 then
+        text = text:sub(1, 187) .. "..."
+    end
+    return text
 end
 
 local function listFolder(path)
-    local fn = getFunc("listfiles")
-    if not fn then error("Executor gak punya listfiles()", 0) end
-    local ok, res = pcall(fn, path)
-    if not ok then error("listfiles gagal", 0) end
-    if type(res) ~= "table" then error("listfiles bukan table", 0) end
-    return res
+    local listFunction = executorFunction("listfiles")
+    if listFunction == nil then
+        error("Executor tidak menyediakan listfiles(folder)", 0)
+    end
+    local ok, result = pcall(listFunction, path)
+    if not ok then
+        error("listfiles gagal: " .. tostring(result), 0)
+    end
+    if type(result) ~= "table" then
+        error("listfiles tidak mengembalikan table", 0)
+    end
+    return result
 end
 
 local function isFolder(path)
-    local fn = getFunc("isfolder")
-    if fn then
-        local ok, res = pcall(fn, path)
-        if ok then return res == true end
+    local folderFunction = executorFunction("isfolder")
+    if folderFunction ~= nil then
+        local ok, result = pcall(folderFunction, path)
+        if ok then
+            return result == true
+        end
     end
-    return not isRbxm(path) and not path:match("%.%w+$")
+    return tostring(path):sub(-1) == "/"
 end
 
-local function scanFolder(root, recursive)
+local function collectRbxmFiles(root, recursive)
     local paths = {}
-    local seen = {}
-    local visited = {}
-    
+    local seenFiles = {}
+    local seenFolders = {}
+
     local function visit(folder, depth)
         folder = normalizePath(folder)
-        if depth > 6 or visited[folder] or #paths >= 300 then return end
-        visited[folder] = true
-        
-        local ok, children = pcall(listFolder, folder)
-        if not ok then return end
-        
+        if depth > MAX_SCAN_DEPTH or seenFolders[folder] or #paths >= MAX_FILES then
+            return
+        end
+        seenFolders[folder] = true
+
+        local children = listFolder(folder)
         for _, item in ipairs(children) do
-            if #paths >= 300 then break end
+            if #paths >= MAX_FILES then
+                break
+            end
             local path = normalizePath(item)
             if isFolder(path) then
-                if recursive then pcall(visit, path, depth + 1) end
+                if recursive then
+                    pcall(visit, path, depth + 1)
+                end
             elseif isRbxm(path) then
                 local key = string.lower(path)
-                if not seen[key] then
-                    seen[key] = true
+                if not seenFiles[key] then
+                    seenFiles[key] = true
                     paths[#paths + 1] = path
                 end
             end
         end
     end
-    
+
     visit(root, 0)
     table.sort(paths, function(a, b)
-        return string.lower(fname(a)) < string.lower(fname(b))
+        return string.lower(fileName(a)) < string.lower(fileName(b))
     end)
     return paths
 end
 
--- ============================================================
--- CONFIG SAVE/LOAD
--- ============================================================
-local CONFIG_FILE = "afterlife_config.json"
+-- -------------------------------------------------------------------------
+-- UI shell
+-- -------------------------------------------------------------------------
+local backdrop = Instance.new("Frame")
+backdrop.BackgroundColor3 = C.black
+backdrop.BackgroundTransparency = 0.22
+backdrop.BorderSizePixel = 0
+backdrop.Size = UDim2.new(1, 0, 1, 0)
+backdrop.Parent = screenGui
 
-local defaultConfig = {
-    lastPath = "/sdcard/Download",
-    autoScan = false,
-    showToast = true,
-    soundEnabled = true,
-    totalImported = 0,
-    vipUsers = 0,
-}
-
-local function loadConfig()
-    local cfg = {}
-    for k, v in pairs(defaultConfig) do cfg[k] = v end
-    
-    if readfile and isfile then
-        local ok, exists = pcall(isfile, CONFIG_FILE)
-        if ok and exists then
-            local ok2, data = pcall(readfile, CONFIG_FILE)
-            if ok2 and data then
-                local ok3, parsed = pcall(HttpService.JSONDecode, HttpService, data)
-                if ok3 and type(parsed) == "table" then
-                    for k, v in pairs(parsed) do cfg[k] = v end
-                end
-            end
-        end
-    end
-    return cfg
-end
-
-local function saveConfig(cfg)
-    if writefile then
-        local ok, json = pcall(HttpService.JSONEncode, HttpService, cfg)
-        if ok then pcall(writefile, CONFIG_FILE, json) end
-    end
-end
-
-local config = loadConfig()
-
--- ============================================================
--- TOAST NOTIFICATION SYSTEM
--- ============================================================
-local toastHolder = Instance.new("Frame")
-toastHolder.BackgroundTransparency = 1
-toastHolder.Position = UDim2.new(1, -340, 0, 20)
-toastHolder.Size = UDim2.new(0, 320, 0, 400)
-toastHolder.Parent = screenGui
-
-local toastLayout = Instance.new("UIListLayout")
-toastLayout.Padding = UDim.new(0, 8)
-toastLayout.VerticalAlignment = Enum.VerticalAlignment.Top
-toastLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
-toastLayout.SortOrder = Enum.SortOrder.LayoutOrder
-toastLayout.Parent = toastHolder
-
-local toastOrder = 0
-local function showToast(title, message, color)
-    if not config.showToast then return end
-    color = color or C.purple
-    toastOrder = toastOrder + 1
-    
-    local toast = Instance.new("Frame")
-    toast.BackgroundColor3 = C.card
-    toast.BorderSizePixel = 0
-    toast.Size = UDim2.new(1, 0, 0, 62)
-    toast.LayoutOrder = toastOrder
-    toast.Parent = toastHolder
-    corner(toast, 10)
-    stroke(toast, color, 0.3, 1.5)
-    
-    local accent = Instance.new("Frame")
-    accent.BackgroundColor3 = color
-    accent.BorderSizePixel = 0
-    accent.Size = UDim2.new(0, 4, 1, 0)
-    accent.Parent = toast
-    corner(accent, 10)
-    
-    local titleLbl = lbl(toast, title, UDim2.new(0, 14, 0, 8), UDim2.new(1, -20, 0, 18), Enum.Font.GothamBold, 12, C.text)
-    local msgLbl = lbl(toast, message, UDim2.new(0, 14, 0, 30), UDim2.new(1, -20, 0, 24), Enum.Font.Gotham, 10, C.muted)
-    msgLbl.TextWrapped = true
-    
-    -- Auto dismiss
-    task.spawn(function()
-        task.wait(3.5)
-        TweenService:Create(toast, TweenInfo.new(0.3), {BackgroundTransparency = 1}):Play()
-        for _, c in ipairs(toast:GetDescendants()) do
-            if c:IsA("TextLabel") then
-                TweenService:Create(c, TweenInfo.new(0.3), {TextTransparency = 1}):Play()
-            end
-        end
-        TweenService:Create(accent, TweenInfo.new(0.3), {BackgroundTransparency = 1}):Play()
-        task.wait(0.4)
-        toast:Destroy()
-    end)
-end
-
--- ============================================================
--- FLOATING TOGGLE
--- ============================================================
-local toggleBtn = Instance.new("TextButton")
-toggleBtn.Name = "Toggle"
-toggleBtn.BackgroundColor3 = C.card2
-toggleBtn.BorderSizePixel = 0
-toggleBtn.Position = UDim2.new(0, 12, 0.5, -22)
-toggleBtn.Size = UDim2.new(0, 44, 0, 44)
-toggleBtn.Font = Enum.Font.GothamBold
-toggleBtn.TextSize = 18
-toggleBtn.TextColor3 = C.purpleHover
-toggleBtn.Text = "R"
-toggleBtn.AutoButtonColor = false
-toggleBtn.Draggable = true
-toggleBtn.ZIndex = 250
-toggleBtn.Parent = screenGui
-corner(toggleBtn, 14)
-stroke(toggleBtn, C.purple2, 0.2, 1.5)
-hover(toggleBtn, C.card2, C.purple2)
-
--- ============================================================
--- MAIN APP
--- ============================================================
 local app = Instance.new("Frame")
-app.Size = UDim2.new(0, 640, 0, 400)
+app.Name = "AssetHub"
+app.Size = UDim2.new(0.70, 0, 0.40, 0)
 app.Position = UDim2.new(0.5, 0, 0.5, 0)
 app.AnchorPoint = Vector2.new(0.5, 0.5)
-app.BackgroundColor3 = C.bg
+app.BackgroundColor3 = C.panel
 app.BorderSizePixel = 0
 app.Visible = false
-app.Parent = screenGui
+app.Parent = backdrop
+
+-- Floating button untuk membuka/menutup panel tanpa menghancurkan UI.
+local toggleButton = Instance.new("TextButton")
+toggleButton.Name = "Toggle"
+toggleButton.BackgroundColor3 = C.card2
+toggleButton.BorderSizePixel = 0
+toggleButton.Position = UDim2.new(0, 12, 0.5, -22)
+toggleButton.Size = UDim2.new(0, 44, 0, 44)
+toggleButton.Font = Enum.Font.GothamBold
+toggleButton.TextSize = 16
+toggleButton.TextColor3 = C.purpleHover
+toggleButton.Text = "R"
+toggleButton.AutoButtonColor = false
+toggleButton.Visible = false
+toggleButton.ZIndex = 200
+toggleButton.Parent = screenGui
+corner(toggleButton, 13)
+stroke(toggleButton, C.purple2, 0.1, 1)
+addHover(toggleButton, C.card2, C.card)
+
+toggleButton.MouseButton1Click:Connect(function()
+    app.Visible = not app.Visible
+    backdrop.Visible = app.Visible
+end)
+
 corner(app, 14)
-stroke(app, C.purple2, 0.4, 1.5)
+stroke(app, C.line, 0.18, 1)
 
-local glow = Instance.new("Frame")
-glow.BackgroundColor3 = C.purple
-glow.BackgroundTransparency = 0.85
-glow.BorderSizePixel = 0
-glow.Size = UDim2.new(1, 0, 0, 80)
-glow.Parent = app
-corner(glow, 14)
+local appConstraint = Instance.new("UISizeConstraint")
+appConstraint.MinSize = Vector2.new(320, 260)
+appConstraint.MaxSize = Vector2.new(500, 340)
+appConstraint.Parent = app
 
--- ============================================================
--- SIDEBAR
--- ============================================================
 local sidebar = Instance.new("Frame")
+sidebar.Name = "Sidebar"
 sidebar.BackgroundColor3 = C.sidebar
 sidebar.BorderSizePixel = 0
-sidebar.Size = UDim2.new(0, 150, 1, 0)
+sidebar.Size = UDim2.new(0, 140, 1, 0)
 sidebar.Parent = app
 corner(sidebar, 14)
 
-local brandBox = Instance.new("Frame")
-brandBox.BackgroundColor3 = C.panel
-brandBox.BorderSizePixel = 0
-brandBox.Position = UDim2.new(0, 14, 0, 14)
-brandBox.Size = UDim2.new(1, -28, 0, 44)
-brandBox.Parent = sidebar
-corner(brandBox, 10)
-stroke(brandBox, C.purple2, 0.6, 1)
+local sidebarMask = Instance.new("Frame")
+sidebarMask.BackgroundColor3 = C.sidebar
+sidebarMask.BorderSizePixel = 0
+sidebarMask.Position = UDim2.new(1, -14, 0, 0)
+sidebarMask.Size = UDim2.new(0, 14, 1, 0)
+sidebarMask.Parent = sidebar
 
-lbl(brandBox, "AFTERLIFE", UDim2.new(0, 10, 0, 4), UDim2.new(1, -20, 0, 18), Enum.Font.GothamBold, 12, C.text)
-lbl(brandBox, "PROJECT v2.0", UDim2.new(0, 10, 0, 20), UDim2.new(1, -20, 0, 14), Enum.Font.Gotham, 8, C.muted)
+local brandIcon = Instance.new("TextLabel")
+brandIcon.BackgroundColor3 = C.card2
+brandIcon.BorderSizePixel = 0
+brandIcon.Position = UDim2.new(0, 14, 0, 14)
+brandIcon.Size = UDim2.new(0, 34, 0, 34)
+brandIcon.Font = Enum.Font.GothamBold
+brandIcon.TextSize = 15
+brandIcon.TextColor3 = C.purpleHover
+brandIcon.Text = "R"
+brandIcon.Parent = sidebar
+corner(brandIcon, 12)
+stroke(brandIcon, C.purple2, 0.15, 1)
+
+local brandTitle = label(sidebar, "ASSET HUB", UDim2.new(0, 56, 0, 14), UDim2.new(1, -62, 0, 17), Enum.Font.GothamBold, 10, C.text)
+local brandVersion = label(sidebar, "RBXM  •  NATIVE", UDim2.new(0, 56, 0, 31), UDim2.new(1, -62, 0, 12), Enum.Font.Gotham, 7, C.muted)
+
+local sideLine = Instance.new("Frame")
+sideLine.BackgroundColor3 = C.line
+sideLine.BackgroundTransparency = 0.55
+sideLine.BorderSizePixel = 0
+sideLine.Position = UDim2.new(0, 14, 0, 62)
+sideLine.Size = UDim2.new(1, -28, 0, 1)
+sideLine.Parent = sidebar
 
 local navHolder = Instance.new("Frame")
 navHolder.BackgroundTransparency = 1
-navHolder.Position = UDim2.new(0, 8, 0, 70)
-navHolder.Size = UDim2.new(1, -16, 0, 260)
+navHolder.Position = UDim2.new(0, 8, 0, 78)
+navHolder.Size = UDim2.new(1, -16, 0, 122)
 navHolder.Parent = sidebar
 
 local navLayout = Instance.new("UIListLayout")
-navLayout.Padding = UDim.new(0, 4)
+navLayout.Padding = UDim.new(0, 6)
 navLayout.SortOrder = Enum.SortOrder.LayoutOrder
 navLayout.Parent = navHolder
 
 local navButtons = {}
+local navOrder = 0
 local pages = {}
-local activePage = "ASSETS"
-local order = 0
+local activePage = "Overview"
 
 local function makeNav(name, icon)
-    order = order + 1
-    local item = btn(navHolder, "", UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 36), C.sidebar, 11)
-    item.LayoutOrder = order
-    
+    local item = button(navHolder, "", UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 39), C.sidebar, 11)
+    item.Name = name
+    navOrder = navOrder + 1
+    item.LayoutOrder = navOrder
+
     local activeBar = Instance.new("Frame")
+    activeBar.Name = "ActiveBar"
     activeBar.BackgroundColor3 = C.purple
     activeBar.BorderSizePixel = 0
-    activeBar.Position = UDim2.new(0, 0, 0.5, -10)
-    activeBar.Size = UDim2.new(0, 3, 0, 20)
+    activeBar.Position = UDim2.new(0, 0, 0.5, -11)
+    activeBar.Size = UDim2.new(0, 4, 0, 22)
     activeBar.Visible = false
     activeBar.Parent = item
     corner(activeBar, 3)
-    
-    local iconLbl = lbl(item, icon, UDim2.new(0, 14, 0, 0), UDim2.new(0, 20, 1, 0), Enum.Font.GothamBold, 12, C.muted)
-    iconLbl.TextXAlignment = Enum.TextXAlignment.Center
-    local textLbl = lbl(item, name, UDim2.new(0, 42, 0, 0), UDim2.new(1, -48, 1, 0), Enum.Font.GothamBold, 10, C.muted)
-    
+
+    local iconLabel = label(item, icon, UDim2.new(0, 20, 0, 0), UDim2.new(0, 25, 1, 0), Enum.Font.GothamBold, 17, C.muted)
+    iconLabel.TextXAlignment = Enum.TextXAlignment.Center
+    local textLabel = label(item, name, UDim2.new(0, 58, 0, 0), UDim2.new(1, -65, 1, 0), Enum.Font.Gotham, 11, C.muted)
+
     item.MouseEnter:Connect(function()
-        if activePage ~= name then item.BackgroundColor3 = C.panel end
+        if activePage ~= name then
+            item.BackgroundColor3 = C.card
+        end
     end)
     item.MouseLeave:Connect(function()
-        if activePage ~= name then item.BackgroundColor3 = C.sidebar end
+        if activePage ~= name then
+            item.BackgroundColor3 = C.sidebar
+        end
     end)
-    
-    navButtons[name] = {btn = item, bar = activeBar, icon = iconLbl, text = textLbl}
+
+    navButtons[name] = {
+        button = item,
+        bar = activeBar,
+        icon = iconLabel,
+        text = textLabel,
+    }
     return item
 end
 
-makeNav("ASSETS", "▣")
-makeNav("TOOLBOX", "✄")
-makeNav("PLUGINS", "⚙")
-makeNav("BUY ACC", "💎")
-makeNav("SETTINGS", "☰")
+local overviewNav = makeNav("Overview", "▦")
+local assetsNav = makeNav("Assets", "▰")
+local settingsNav = makeNav("Settings", "⚙")
 
--- ============================================================
--- CONTENT
--- ============================================================
+local quickLine = Instance.new("Frame")
+quickLine.BackgroundColor3 = C.line
+quickLine.BackgroundTransparency = 0.55
+quickLine.BorderSizePixel = 0
+quickLine.Position = UDim2.new(0, 14, 1, -112)
+quickLine.Size = UDim2.new(1, -28, 0, 1)
+quickLine.Parent = sidebar
+
+local quickLabel = label(sidebar, "TOOLS", UDim2.new(0, 14, 1, -96), UDim2.new(1, -28, 0, 16), Enum.Font.GothamBold, 8, C.dim)
+
+local rescanButton = button(sidebar, "↻  RESCAN", UDim2.new(0, 14, 1, -69), UDim2.new(1, -28, 0, 32), C.card, 8)
+rescanButton.TextXAlignment = Enum.TextXAlignment.Left
+local rescanPadding = Instance.new("UIPadding")
+rescanPadding.PaddingLeft = UDim.new(0, 8)
+rescanPadding.Parent = rescanButton
+addHover(rescanButton, C.card, C.card2)
+
+local sideHint = label(sidebar, "NATIVE\nIMPORT", UDim2.new(0, 14, 1, -34), UDim2.new(1, -28, 0, 24), Enum.Font.Gotham, 7, C.dim)
+sideHint.TextWrapped = true
+
 local content = Instance.new("Frame")
+content.Name = "Content"
 content.BackgroundTransparency = 1
-content.Position = UDim2.new(0, 150, 0, 0)
-content.Size = UDim2.new(1, -150, 1, 0)
+content.Position = UDim2.new(0, 140, 0, 0)
+content.Size = UDim2.new(1, -140, 1, 0)
 content.Parent = app
 
 local contentHeader = Instance.new("Frame")
 contentHeader.BackgroundTransparency = 1
-contentHeader.Position = UDim2.new(0, 18, 0, 14)
-contentHeader.Size = UDim2.new(1, -36, 0, 40)
+contentHeader.Position = UDim2.new(0, 14, 0, 12)
+contentHeader.Size = UDim2.new(1, -28, 0, 28)
 contentHeader.Parent = content
 
-local pageTitle = lbl(contentHeader, "Dashboard", UDim2.new(0, 0, 0, 0), UDim2.new(1, -50, 0, 22), Enum.Font.GothamBold, 17, C.text)
-local pageSub = lbl(contentHeader, "Manage your local assets", UDim2.new(0, 0, 0, 22), UDim2.new(1, -50, 0, 14), Enum.Font.Gotham, 9, C.muted)
+local pageTitle = label(contentHeader, "Dashboard", UDim2.new(0, 0, 0, 0), UDim2.new(1, -48, 0, 20), Enum.Font.GothamBold, 15, C.text)
+local pageSubTitle = label(contentHeader, "Manage local RBXM assets.", UDim2.new(0, 0, 0, 19), UDim2.new(1, -40, 0, 12), Enum.Font.Gotham, 8, C.muted)
 
-local closeBtn = btn(contentHeader, "×", UDim2.new(1, -34, 0, 0), UDim2.new(0, 34, 0, 34), C.card, 18)
-closeBtn.TextColor3 = C.muted
-hover(closeBtn, C.card, C.red)
+local closeButton = button(contentHeader, "×", UDim2.new(1, -31, 0, 0), UDim2.new(0, 30, 0, 30), C.card, 16)
+closeButton.TextColor3 = C.muted
+addHover(closeButton, C.card, Color3.fromRGB(75, 44, 64))
+closeButton.MouseButton1Click:Connect(function()
+    app.Visible = false
+    backdrop.Visible = false
+    toggleButton.Visible = true
+end)
 
--- ============================================================
--- PAGE 1: ASSETS (WORKING)
--- ============================================================
-local assetsPage = Instance.new("Frame")
-assetsPage.BackgroundTransparency = 1
-assetsPage.Position = UDim2.new(0, 18, 0, 60)
-assetsPage.Size = UDim2.new(1, -36, 1, -74)
-assetsPage.Parent = content
-pages["ASSETS"] = assetsPage
+local footerStatus = label(content, "Ready.", UDim2.new(0, 14, 1, -20), UDim2.new(1, -28, 0, 14), Enum.Font.Gotham, 8, C.muted)
+footerStatus.TextTruncate = Enum.TextTruncate.AtEnd
 
--- Stats Row
-local statsRow = Instance.new("Frame")
-statsRow.BackgroundTransparency = 1
-statsRow.Size = UDim2.new(1, 0, 0, 58)
-statsRow.Parent = assetsPage
+local function setStatus(text, color)
+    footerStatus.Text = tostring(text)
+    footerStatus.TextColor3 = color or C.muted
+end
+
+-- -------------------------------------------------------------------------
+-- Dashboard page
+-- -------------------------------------------------------------------------
+local overviewPage = Instance.new("Frame")
+overviewPage.Name = "OverviewPage"
+overviewPage.BackgroundTransparency = 1
+overviewPage.Position = UDim2.new(0, 14, 0, 62)
+overviewPage.Size = UDim2.new(1, -28, 1, -92)
+overviewPage.Parent = content
+pages.Overview = overviewPage
 
 local totalCard = Instance.new("Frame")
 totalCard.BackgroundColor3 = C.card
 totalCard.BorderSizePixel = 0
-totalCard.Size = UDim2.new(0.5, -4, 1, 0)
-totalCard.Parent = statsRow
-corner(totalCard, 10)
-stroke(totalCard, C.purple2, 0.6, 1)
-local totalNum = lbl(totalCard, "0", UDim2.new(0, 12, 0, 6), UDim2.new(1, -24, 0, 24), Enum.Font.GothamBold, 20, C.text)
-lbl(totalCard, "Total RBXM Files", UDim2.new(0, 12, 0, 34), UDim2.new(1, -24, 0, 14), Enum.Font.Gotham, 9, C.muted)
+totalCard.Size = UDim2.new(0.5, -5, 0, 58)
+totalCard.Parent = overviewPage
+corner(totalCard, 11)
+stroke(totalCard, C.line, 0.45, 1)
+local totalNumber = label(totalCard, "0", UDim2.new(0, 12, 0, 7), UDim2.new(1, -24, 0, 22), Enum.Font.GothamBold, 18, C.text)
+local totalCaption = label(totalCard, "TOTAL ASSETS", UDim2.new(0, 12, 0, 35), UDim2.new(1, -24, 0, 13), Enum.Font.Gotham, 7, C.muted)
 
-local vipCard = Instance.new("Frame")
-vipCard.BackgroundColor3 = C.card
-vipCard.BorderSizePixel = 0
-vipCard.Position = UDim2.new(0.5, 4, 0, 0)
-vipCard.Size = UDim2.new(0.5, -4, 1, 0)
-vipCard.Parent = statsRow
-corner(vipCard, 10)
-stroke(vipCard, C.gold, 0.4, 1.5)
-local vipNum = lbl(vipCard, tostring(config.totalImported), UDim2.new(0, 12, 0, 6), UDim2.new(1, -24, 0, 24), Enum.Font.GothamBold, 20, C.gold)
-lbl(vipCard, "Total Imported", UDim2.new(0, 12, 0, 34), UDim2.new(1, -24, 0, 14), Enum.Font.Gotham, 9, C.muted)
+local typeCard = Instance.new("Frame")
+typeCard.BackgroundColor3 = C.card
+typeCard.BorderSizePixel = 0
+typeCard.Position = UDim2.new(0.5, 5, 0, 0)
+typeCard.Size = UDim2.new(0.5, -5, 0, 58)
+typeCard.Parent = overviewPage
+corner(typeCard, 11)
+stroke(typeCard, C.line, 0.45, 1)
+local rbxmNumber = label(typeCard, "0", UDim2.new(0, 12, 0, 7), UDim2.new(1, -24, 0, 22), Enum.Font.GothamBold, 18, C.text)
+local rbxmCaption = label(typeCard, "RBXM FILES", UDim2.new(0, 12, 0, 35), UDim2.new(1, -24, 0, 13), Enum.Font.Gotham, 7, C.muted)
 
--- Recent Assets header
-local recentHeader = Instance.new("Frame")
-recentHeader.BackgroundTransparency = 1
-recentHeader.Position = UDim2.new(0, 0, 0, 72)
-recentHeader.Size = UDim2.new(1, 0, 0, 22)
-recentHeader.Parent = assetsPage
-lbl(recentHeader, "Recent Assets", UDim2.new(0, 0, 0, 0), UDim2.new(1, -80, 1, 0), Enum.Font.GothamBold, 12, C.text)
+local welcomeCard = Instance.new("Frame")
+welcomeCard.BackgroundColor3 = C.card
+welcomeCard.BorderSizePixel = 0
+welcomeCard.Position = UDim2.new(0, 0, 0, 70)
+welcomeCard.Size = UDim2.new(1, 0, 0, 88)
+welcomeCard.Parent = overviewPage
+corner(welcomeCard, 11)
+stroke(welcomeCard, C.line, 0.55, 1)
+local welcomeTitle = label(welcomeCard, "Native asset workflow", UDim2.new(0, 12, 0, 10), UDim2.new(1, -24, 0, 17), Enum.Font.GothamBold, 11, C.text)
+local welcomeText = label(welcomeCard, "Scan folder lalu import dengan native loader Roblox.", UDim2.new(0, 12, 0, 31), UDim2.new(1, -24, 0, 16), Enum.Font.Gotham, 8, C.muted)
+welcomeText.TextWrapped = true
 
--- Path Input
-local pathInput = Instance.new("TextBox")
-pathInput.BackgroundColor3 = C.input
-pathInput.BorderSizePixel = 0
-pathInput.Position = UDim2.new(0, 0, 0, 100)
-pathInput.Size = UDim2.new(0.72, -4, 0, 32)
-pathInput.Font = Enum.Font.Code
-pathInput.TextSize = 10
-pathInput.TextColor3 = C.text
-pathInput.PlaceholderColor3 = C.muted
-pathInput.PlaceholderText = "Path folder..."
-pathInput.Text = config.lastPath
-pathInput.ClearTextOnFocus = false
-pathInput.TextXAlignment = Enum.TextXAlignment.Left
-pathInput.Parent = assetsPage
-corner(pathInput, 8)
-local pad = Instance.new("UIPadding")
-pad.PaddingLeft = UDim.new(0, 10)
-pad.PaddingRight = UDim.new(0, 10)
-pad.Parent = pathInput
+local openAssetsButton = button(welcomeCard, "OPEN ASSETS", UDim2.new(0, 12, 1, -29), UDim2.new(0, 104, 0, 22), C.purple2, 8)
+addHover(openAssetsButton, C.purple2, C.purple)
 
-local scanBtn = btn(assetsPage, "🔍 SCAN", UDim2.new(0.72, 4, 0, 100), UDim2.new(0.28, -4, 0, 32), C.purple2, 10)
-hover(scanBtn, C.purple2, C.purple)
+local overviewNote = label(overviewPage, "Quick tools", UDim2.new(0, 0, 0, 169), UDim2.new(1, -4, 0, 16), Enum.Font.GothamBold, 9, C.text)
+local overviewRescan = button(overviewPage, "↻   Rescan local assets", UDim2.new(0, 0, 0, 190), UDim2.new(1, -4, 0, 30), C.card2, 8)
+overviewRescan.TextXAlignment = Enum.TextXAlignment.Left
+local overviewPadding = Instance.new("UIPadding")
+overviewPadding.PaddingLeft = UDim.new(0, 10)
+overviewPadding.Parent = overviewRescan
+addHover(overviewRescan, C.card2, C.input)
 
--- Action Buttons Row
-local actionRow = Instance.new("Frame")
-actionRow.BackgroundTransparency = 1
-actionRow.Position = UDim2.new(0, 0, 0, 140)
-actionRow.Size = UDim2.new(1, 0, 0, 28)
-actionRow.Parent = assetsPage
+-- -------------------------------------------------------------------------
+-- Assets page
+-- -------------------------------------------------------------------------
+local assetsPage = Instance.new("Frame")
+assetsPage.Name = "AssetsPage"
+assetsPage.BackgroundTransparency = 1
+assetsPage.Position = UDim2.new(0, 14, 0, 62)
+assetsPage.Size = UDim2.new(1, -28, 1, -92)
+assetsPage.Visible = false
+assetsPage.Parent = content
+pages.Assets = assetsPage
 
-local importAllBtn = btn(actionRow, "📦 IMPORT ALL", UDim2.new(0, 0, 0, 0), UDim2.new(0.33, -3, 1, 0), C.purple2, 9)
-hover(importAllBtn, C.purple2, C.purple)
+local assetsTopLine = Instance.new("Frame")
+assetsTopLine.BackgroundTransparency = 1
+assetsTopLine.Size = UDim2.new(1, 0, 0, 34)
+assetsTopLine.Parent = assetsPage
+local assetsDescription = label(assetsTopLine, "Scan and import local RBXM files.", UDim2.new(0, 0, 0, 0), UDim2.new(0.5, 0, 1, 0), Enum.Font.Gotham, 8, C.muted)
 
-local clearBtn = btn(actionRow, "🗑️ CLEAR LIST", UDim2.new(0.33, 3, 0, 0), UDim2.new(0.33, -3, 1, 0), C.card, 9)
-hover(clearBtn, C.card, C.card2)
+local folderBox = Instance.new("TextBox")
+folderBox.Name = "FolderPath"
+folderBox.Position = UDim2.new(0, 0, 0, 31)
+folderBox.Size = UDim2.new(0.72, -4, 0, 27)
+folderBox.BackgroundColor3 = C.input
+folderBox.BorderSizePixel = 0
+folderBox.ClearTextOnFocus = false
+folderBox.Font = Enum.Font.Code
+folderBox.TextSize = 8
+folderBox.TextColor3 = C.text
+folderBox.PlaceholderColor3 = C.muted
+folderBox.PlaceholderText = "Folder path..."
+folderBox.Text = "."
+folderBox.TextXAlignment = Enum.TextXAlignment.Left
+folderBox.Parent = assetsPage
+corner(folderBox, 6)
+local folderPadding = Instance.new("UIPadding")
+folderPadding.PaddingLeft = UDim.new(0, 8)
+folderPadding.PaddingRight = UDim.new(0, 8)
+folderPadding.Parent = folderBox
 
-local refreshBtn = btn(actionRow, "🔄 REFRESH", UDim2.new(0.66, 3, 0, 0), UDim2.new(0.34, -3, 1, 0), C.card, 9)
-hover(refreshBtn, C.card, C.card2)
+local scanPageButton = button(assetsPage, "SCAN", UDim2.new(0.72, 3, 0, 31), UDim2.new(0.28, -3, 0, 27), C.purple2, 8)
+addHover(scanPageButton, C.purple2, C.purple)
 
--- Asset List
+local assetSearch = Instance.new("TextBox")
+assetSearch.Position = UDim2.new(0.5, 0, 0, 0)
+assetSearch.Size = UDim2.new(0.5, -4, 0, 30)
+assetSearch.BackgroundColor3 = C.input
+assetSearch.BorderSizePixel = 0
+assetSearch.ClearTextOnFocus = false
+assetSearch.Font = Enum.Font.Gotham
+assetSearch.TextSize = 10
+assetSearch.TextColor3 = C.text
+assetSearch.PlaceholderColor3 = C.muted
+assetSearch.PlaceholderText = "Search assets..."
+assetSearch.Text = ""
+assetSearch.TextXAlignment = Enum.TextXAlignment.Left
+assetSearch.Parent = assetsTopLine
+corner(assetSearch, 7)
+local assetSearchPadding = Instance.new("UIPadding")
+assetSearchPadding.PaddingLeft = UDim.new(0, 10)
+assetSearchPadding.PaddingRight = UDim.new(0, 10)
+assetSearchPadding.Parent = assetSearch
+
+local filterBar = Instance.new("Frame")
+filterBar.BackgroundColor3 = C.input
+filterBar.BorderSizePixel = 0
+filterBar.Position = UDim2.new(0, 0, 0, 65)
+filterBar.Size = UDim2.new(1, 0, 0, 34)
+filterBar.Parent = assetsPage
+corner(filterBar, 17)
+
+local filters = {}
+local currentFilter = "ALL"
+local function makeFilter(name, text, position, size)
+    local item = button(filterBar, text, position, size, C.input, 9)
+    item.TextColor3 = C.muted
+    item.Name = name
+    filters[name] = item
+    return item
+end
+makeFilter("ALL", "ALL", UDim2.new(0, 2, 0, 2), UDim2.new(0.333, -3, 1, -4))
+makeFilter("RBXM", "RBXM", UDim2.new(0.333, 1, 0, 2), UDim2.new(0.333, -3, 1, -4))
+makeFilter("RBXL", "RBXL", UDim2.new(0.666, 0, 0, 2), UDim2.new(0.333, -3, 1, -4))
+
 local assetList = Instance.new("ScrollingFrame")
-assetList.BackgroundColor3 = C.panel
+assetList.BackgroundColor3 = C.card
 assetList.BorderSizePixel = 0
-assetList.Position = UDim2.new(0, 0, 0, 178)
-assetList.Size = UDim2.new(1, 0, 1, -178)
-assetList.ScrollBarThickness = 3
-assetList.ScrollBarImageColor3 = C.purple
+assetList.Position = UDim2.new(0, 0, 0, 106)
+assetList.Size = UDim2.new(1, 0, 1, -106)
+assetList.ScrollBarThickness = 4
+assetList.ScrollBarImageColor3 = C.line
 assetList.CanvasSize = UDim2.new(0, 0, 0, 0)
 assetList.Parent = assetsPage
-corner(assetList, 10)
-stroke(assetList, C.purple2, 0.7, 1)
-local listPad = Instance.new("UIPadding")
-listPad.PaddingTop = UDim.new(0, 8)
-listPad.PaddingBottom = UDim.new(0, 8)
-listPad.PaddingLeft = UDim.new(0, 8)
-listPad.PaddingRight = UDim.new(0, 8)
-listPad.Parent = assetList
-local listLayout = Instance.new("UIListLayout")
-listLayout.Padding = UDim.new(0, 6)
-listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-listLayout.Parent = assetList
+corner(assetList, 11)
+local assetListPadding = Instance.new("UIPadding")
+assetListPadding.PaddingTop = UDim.new(0, 9)
+assetListPadding.PaddingBottom = UDim.new(0, 9)
+assetListPadding.PaddingLeft = UDim.new(0, 9)
+assetListPadding.PaddingRight = UDim.new(0, 9)
+assetListPadding.Parent = assetList
+local assetLayout = Instance.new("UIListLayout")
+assetLayout.Padding = UDim.new(0, 7)
+assetLayout.SortOrder = Enum.SortOrder.LayoutOrder
+assetLayout.Parent = assetList
 
-local emptyLbl = lbl(assetList, "Belum ada file.\nIsi path folder lalu klik SCAN.", UDim2.new(0, 20, 0.5, -24), UDim2.new(1, -40, 0, 48), Enum.Font.Gotham, 10, C.muted)
-emptyLbl.TextWrapped = true
-emptyLbl.TextXAlignment = Enum.TextXAlignment.Center
-emptyLbl.TextYAlignment = Enum.TextYAlignment.Center
+local assetEmpty = label(assetList, "Belum ada file.\nTekan Rescan Assets untuk mencari RBXM.", UDim2.new(0, 20, 0.5, -24), UDim2.new(1, -40, 0, 48), Enum.Font.Gotham, 10, C.muted)
+assetEmpty.TextWrapped = true
+assetEmpty.TextXAlignment = Enum.TextXAlignment.Center
+assetEmpty.TextYAlignment = Enum.TextYAlignment.Center
 
--- ============================================================
--- PAGE 2: TOOLBOX (WORKING - SEARCH + SPAWN)
--- ============================================================
-local toolboxPage = Instance.new("Frame")
-toolboxPage.BackgroundTransparency = 1
-toolboxPage.Position = UDim2.new(0, 18, 0, 60)
-toolboxPage.Size = UDim2.new(1, -36, 1, -74)
-toolboxPage.Visible = false
-toolboxPage.Parent = content
-pages["TOOLBOX"] = toolboxPage
-
-lbl(toolboxPage, "🔍 Cari Model di Roblox Toolbox", UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 20), Enum.Font.GothamBold, 12, C.text)
-
-local searchBox = Instance.new("TextBox")
-searchBox.BackgroundColor3 = C.input
-searchBox.BorderSizePixel = 0
-searchBox.Position = UDim2.new(0, 0, 0, 28)
-searchBox.Size = UDim2.new(0.75, -4, 0, 32)
-searchBox.Font = Enum.Font.Gotham
-searchBox.TextSize = 11
-searchBox.TextColor3 = C.text
-searchBox.PlaceholderColor3 = C.muted
-searchBox.PlaceholderText = "Cari model... (contoh: tree, car, house)"
-searchBox.Text = ""
-searchBox.ClearTextOnFocus = false
-searchBox.TextXAlignment = Enum.TextXAlignment.Left
-searchBox.Parent = toolboxPage
-corner(searchBox, 8)
-local sp = Instance.new("UIPadding")
-sp.PaddingLeft = UDim.new(0, 10)
-sp.PaddingRight = UDim.new(0, 10)
-sp.Parent = searchBox
-
-local searchBtn = btn(toolboxPage, "🔍 CARI", UDim2.new(0.75, 4, 0, 28), UDim2.new(0.25, -4, 0, 32), C.purple2, 10)
-hover(searchBtn, C.purple2, C.purple)
-
-local toolboxList = Instance.new("ScrollingFrame")
-toolboxList.BackgroundColor3 = C.panel
-toolboxList.BorderSizePixel = 0
-toolboxList.Position = UDim2.new(0, 0, 0, 68)
-toolboxList.Size = UDim2.new(1, 0, 1, -68)
-toolboxList.ScrollBarThickness = 3
-toolboxList.ScrollBarImageColor3 = C.purple
-toolboxList.CanvasSize = UDim2.new(0, 0, 0, 0)
-toolboxList.Parent = toolboxPage
-corner(toolboxList, 10)
-stroke(toolboxList, C.purple2, 0.7, 1)
-local tbPad = Instance.new("UIPadding")
-tbPad.PaddingTop = UDim.new(0, 8)
-tbPad.PaddingBottom = UDim.new(0, 8)
-tbPad.PaddingLeft = UDim.new(0, 8)
-tbPad.PaddingRight = UDim.new(0, 8)
-tbPad.Parent = toolboxList
-local tbLayout = Instance.new("UIListLayout")
-tbLayout.Padding = UDim.new(0, 6)
-tbLayout.SortOrder = Enum.SortOrder.LayoutOrder
-tbLayout.Parent = toolboxList
-
-local tbEmpty = lbl(toolboxList, "Ketik nama model & klik CARI.\nHasil akan muncul di sini.", UDim2.new(0, 20, 0.5, -24), UDim2.new(1, -40, 0, 48), Enum.Font.Gotham, 10, C.muted)
-tbEmpty.TextWrapped = true
-tbEmpty.TextXAlignment = Enum.TextXAlignment.Center
-tbEmpty.TextYAlignment = Enum.TextYAlignment.Center
-
--- ============================================================
--- PAGE 3: PLUGINS (WORKING - LIST LOCAL PLUGINS)
--- ============================================================
-local pluginsPage = Instance.new("Frame")
-pluginsPage.BackgroundTransparency = 1
-pluginsPage.Position = UDim2.new(0, 18, 0, 60)
-pluginsPage.Size = UDim2.new(1, -36, 1, -74)
-pluginsPage.Visible = false
-pluginsPage.Parent = content
-pages["PLUGINS"] = pluginsPage
-
-lbl(pluginsPage, "⚙ Plugins Manager", UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 20), Enum.Font.GothamBold, 12, C.text)
-lbl(pluginsPage, "Kelola script plugin yang kamu simpan", UDim2.new(0, 0, 0, 20), UDim2.new(1, 0, 0, 16), Enum.Font.Gotham, 9, C.muted)
-
-local pluginPathInput = Instance.new("TextBox")
-pluginPathInput.BackgroundColor3 = C.input
-pluginPathInput.BorderSizePixel = 0
-pluginPathInput.Position = UDim2.new(0, 0, 0, 42)
-pluginPathInput.Size = UDim2.new(0.72, -4, 0, 32)
-pluginPathInput.Font = Enum.Font.Code
-pluginPathInput.TextSize = 10
-pluginPathInput.TextColor3 = C.text
-pluginPathInput.PlaceholderColor3 = C.muted
-pluginPathInput.PlaceholderText = "Path folder plugins..."
-pluginPathInput.Text = "/sdcard/Plugins"
-pluginPathInput.ClearTextOnFocus = false
-pluginPathInput.TextXAlignment = Enum.TextXAlignment.Left
-pluginPathInput.Parent = pluginsPage
-corner(pluginPathInput, 8)
-local pp = Instance.new("UIPadding")
-pp.PaddingLeft = UDim.new(0, 10)
-pp.PaddingRight = UDim.new(0, 10)
-pp.Parent = pluginPathInput
-
-local scanPluginsBtn = btn(pluginsPage, "🔍 SCAN", UDim2.new(0.72, 4, 0, 42), UDim2.new(0.28, -4, 0, 32), C.purple2, 10)
-hover(scanPluginsBtn, C.purple2, C.purple)
-
-local pluginList = Instance.new("ScrollingFrame")
-pluginList.BackgroundColor3 = C.panel
-pluginList.BorderSizePixel = 0
-pluginList.Position = UDim2.new(0, 0, 0, 82)
-pluginList.Size = UDim2.new(1, 0, 1, -82)
-pluginList.ScrollBarThickness = 3
-pluginList.ScrollBarImageColor3 = C.purple
-pluginList.CanvasSize = UDim2.new(0, 0, 0, 0)
-pluginList.Parent = pluginsPage
-corner(pluginList, 10)
-stroke(pluginList, C.purple2, 0.7, 1)
-local plPad = Instance.new("UIPadding")
-plPad.PaddingTop = UDim.new(0, 8)
-plPad.PaddingBottom = UDim.new(0, 8)
-plPad.PaddingLeft = UDim.new(0, 8)
-plPad.PaddingRight = UDim.new(0, 8)
-plPad.Parent = pluginList
-local plLayout = Instance.new("UIListLayout")
-plLayout.Padding = UDim.new(0, 6)
-plLayout.SortOrder = Enum.SortOrder.LayoutOrder
-plLayout.Parent = pluginList
-
-local plEmpty = lbl(pluginList, "Belum ada plugins.\nIsi path & klik SCAN.", UDim2.new(0, 20, 0.5, -24), UDim2.new(1, -40, 0, 48), Enum.Font.Gotham, 10, C.muted)
-plEmpty.TextWrapped = true
-plEmpty.TextXAlignment = Enum.TextXAlignment.Center
-plEmpty.TextYAlignment = Enum.TextYAlignment.Center
-
--- ============================================================
--- PAGE 4: BUY ACC (MOCKUP with FAQ)
--- ============================================================
-local buyPage = Instance.new("Frame")
-buyPage.BackgroundTransparency = 1
-buyPage.Position = UDim2.new(0, 18, 0, 60)
-buyPage.Size = UDim2.new(1, -36, 1, -74)
-buyPage.Visible = false
-buyPage.Parent = content
-pages["BUY ACC"] = buyPage
-
-lbl(buyPage, "💎 VIP Account", UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 22), Enum.Font.GothamBold, 14, C.gold)
-lbl(buyPage, "Unlock fitur premium Afterlife Project", UDim2.new(0, 0, 0, 24), UDim2.new(1, 0, 0, 14), Enum.Font.Gotham, 9, C.muted)
-
-local vipBanner = Instance.new("Frame")
-vipBanner.BackgroundColor3 = C.card
-vipBanner.BorderSizePixel = 0
-vipBanner.Position = UDim2.new(0, 0, 0, 48)
-vipBanner.Size = UDim2.new(1, 0, 0, 120)
-vipBanner.Parent = buyPage
-corner(vipBanner, 12)
-stroke(vipBanner, C.gold, 0.3, 2)
-
-lbl(vipBanner, "⭐ VIP BENEFITS", UDim2.new(0, 16, 0, 12), UDim2.new(1, -32, 0, 20), Enum.Font.GothamBold, 12, C.gold)
-
-local benefits = {
-    "✓ Unlimited import per hari",
-    "✓ Prioritas update fitur baru",
-    "✓ Custom theme warna",
-    "✓ Support development",
-}
-for i, b in ipairs(benefits) do
-    lbl(vipBanner, b, UDim2.new(0, 16, 0, 36 + (i-1) * 18), UDim2.new(1, -32, 0, 16), Enum.Font.Gotham, 10, C.text)
-end
-
-local contactBtn = btn(buyPage, "📞 HUBUNGI ADMIN", UDim2.new(0, 0, 0, 180), UDim2.new(1, 0, 0, 34), C.purple2, 11)
-hover(contactBtn, C.purple2, C.purple)
-contactBtn.MouseButton1Click:Connect(function()
-    showToast("📞 Hubungi Admin", "Discord: afterlife_project", C.purple)
-end)
-
--- ============================================================
--- PAGE 5: SETTINGS (WORKING!)
--- ============================================================
+-- -------------------------------------------------------------------------
+-- Settings page
+-- -------------------------------------------------------------------------
 local settingsPage = Instance.new("Frame")
+settingsPage.Name = "SettingsPage"
 settingsPage.BackgroundTransparency = 1
-settingsPage.Position = UDim2.new(0, 18, 0, 60)
-settingsPage.Size = UDim2.new(1, -36, 1, -74)
+settingsPage.Position = UDim2.new(0, 14, 0, 62)
+settingsPage.Size = UDim2.new(1, -28, 1, -92)
 settingsPage.Visible = false
 settingsPage.Parent = content
-pages["SETTINGS"] = settingsPage
+pages.Settings = settingsPage
 
-lbl(settingsPage, "☰ Settings", UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 22), Enum.Font.GothamBold, 14, C.text)
-lbl(settingsPage, "Pengaturan aplikasi Afterlife Project", UDim2.new(0, 0, 0, 24), UDim2.new(1, 0, 0, 14), Enum.Font.Gotham, 9, C.muted)
+local aboutTitle = label(settingsPage, "About & Information", UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0, 25), Enum.Font.GothamBold, 18, C.text)
+local aboutCard = Instance.new("Frame")
+aboutCard.BackgroundColor3 = C.card
+aboutCard.BorderSizePixel = 0
+aboutCard.Position = UDim2.new(0, 0, 0, 43)
+aboutCard.Size = UDim2.new(1, 0, 0, 125)
+aboutCard.Parent = settingsPage
+corner(aboutCard, 11)
+stroke(aboutCard, C.line, 0.4, 1)
+local aboutIcon = label(aboutCard, "R", UDim2.new(0, 17, 0, 17), UDim2.new(0, 42, 0, 42), Enum.Font.GothamBold, 19, C.purpleHover)
+aboutIcon.BackgroundColor3 = C.input
+aboutIcon.BackgroundTransparency = 0
+aboutIcon.TextXAlignment = Enum.TextXAlignment.Center
+aboutIcon.TextYAlignment = Enum.TextYAlignment.Center
+corner(aboutIcon, 11)
+local aboutName = label(aboutCard, "RBXM Asset Hub", UDim2.new(0, 76, 0, 18), UDim2.new(1, -92, 0, 22), Enum.Font.GothamBold, 14, C.text)
+local aboutSub = label(aboutCard, "Native local model importer", UDim2.new(0, 76, 0, 41), UDim2.new(1, -92, 0, 18), Enum.Font.Gotham, 10, C.muted)
+local aboutLine = Instance.new("Frame")
+aboutLine.BackgroundColor3 = C.line
+aboutLine.BackgroundTransparency = 0.45
+aboutLine.BorderSizePixel = 0
+aboutLine.Position = UDim2.new(0, 17, 0, 76)
+aboutLine.Size = UDim2.new(1, -34, 0, 1)
+aboutLine.Parent = aboutCard
+local aboutHint = label(aboutCard, "Import engine: InsertService:LoadLocalAsset", UDim2.new(0, 17, 0, 88), UDim2.new(1, -34, 0, 20), Enum.Font.Code, 9, C.purpleHover)
 
-local settingHolder = Instance.new("ScrollingFrame")
-settingHolder.BackgroundColor3 = C.panel
-settingHolder.BorderSizePixel = 0
-settingHolder.Position = UDim2.new(0, 0, 0, 48)
-settingHolder.Size = UDim2.new(1, 0, 1, -48)
-settingHolder.ScrollBarThickness = 3
-settingHolder.ScrollBarImageColor3 = C.purple
-settingHolder.CanvasSize = UDim2.new(0, 0, 0, 0)
-settingHolder.Parent = settingsPage
-corner(settingHolder, 10)
-stroke(settingHolder, C.purple2, 0.7, 1)
-local setPad = Instance.new("UIPadding")
-setPad.PaddingTop = UDim.new(0, 10)
-setPad.PaddingBottom = UDim.new(0, 10)
-setPad.PaddingLeft = UDim.new(0, 10)
-setPad.PaddingRight = UDim.new(0, 10)
-setPad.Parent = settingHolder
-local setLayout = Instance.new("UIListLayout")
-setLayout.Padding = UDim.new(0, 8)
-setLayout.SortOrder = Enum.SortOrder.LayoutOrder
-setLayout.Parent = settingHolder
+local settingsInfo = Instance.new("Frame")
+settingsInfo.BackgroundColor3 = C.card
+settingsInfo.BorderSizePixel = 0
+settingsInfo.Position = UDim2.new(0, 0, 0, 187)
+settingsInfo.Size = UDim2.new(1, 0, 0, 120)
+settingsInfo.Parent = settingsPage
+corner(settingsInfo, 11)
+local settingsHeader = label(settingsInfo, "Workflow", UDim2.new(0, 17, 0, 14), UDim2.new(1, -34, 0, 20), Enum.Font.GothamBold, 12, C.text)
+local settingsText = label(settingsInfo, "Panel hanya melakukan scan nama/path file. Isi RBXM tidak direkonstruksi oleh script sehingga tidak ada scaling manual.", UDim2.new(0, 17, 0, 42), UDim2.new(1, -34, 0, 45), Enum.Font.Gotham, 10, C.muted)
+settingsText.TextWrapped = true
 
-local function makeToggle(label, key, callback)
-    local row = Instance.new("Frame")
-    row.BackgroundColor3 = C.card2
-    row.BorderSizePixel = 0
-    row.Size = UDim2.new(1, -4, 0, 40)
-    row.Parent = settingHolder
-    corner(row, 8)
-    
-    lbl(row, label, UDim2.new(0, 12, 0, 0), UDim2.new(0.7, -12, 1, 0), Enum.Font.Gotham, 11, C.text)
-    
-    local toggle = Instance.new("TextButton")
-    toggle.BackgroundColor3 = config[key] and C.purple or C.dim
-    toggle.BorderSizePixel = 0
-    toggle.Position = UDim2.new(1, -60, 0.5, -12)
-    toggle.Size = UDim2.new(0, 48, 0, 24)
-    toggle.Text = config[key] and "ON" or "OFF"
-    toggle.Font = Enum.Font.GothamBold
-    toggle.TextSize = 10
-    toggle.TextColor3 = C.text
-    toggle.AutoButtonColor = false
-    toggle.Parent = row
-    corner(toggle, 12)
-    
-    toggle.MouseButton1Click:Connect(function()
-        config[key] = not config[key]
-        toggle.BackgroundColor3 = config[key] and C.purple or C.dim
-        toggle.Text = config[key] and "ON" or "OFF"
-        saveConfig(config)
-        if callback then callback(config[key]) end
-    end)
-    
-    return row
+local settingsNote = label(settingsPage, "File rusak akan gagal pada loader native dan tidak dipaksa masuk ke Workspace.", UDim2.new(0, 0, 0, 326), UDim2.new(1, -4, 0, 25), Enum.Font.Gotham, 10, C.yellow)
+settingsNote.TextWrapped = true
+
+-- -------------------------------------------------------------------------
+-- State and rendering
+-- -------------------------------------------------------------------------
+local entries = {}
+local rowObjects = {}
+local scanSubfolders = false
+local scanning = false
+local importing = false
+local filterButtons = filters
+
+local function updateStats()
+    totalNumber.Text = tostring(#entries)
+    rbxmNumber.Text = tostring(#entries)
 end
 
-makeToggle("Auto Scan saat buka", "autoScan")
-makeToggle("Tampilkan Notifikasi", "showToast")
-makeToggle("Suara Aktif", "soundEnabled")
-
--- Reset Button
-local resetBtn = btn(settingHolder, "🗑️ RESET CONFIG", UDim2.new(0, 0, 0, 0), UDim2.new(1, -4, 0, 40), C.card, 10)
-resetBtn.TextColor3 = C.red
-hover(resetBtn, C.card, Color3.fromRGB(80, 30, 50))
-resetBtn.MouseButton1Click:Connect(function()
-    config = {}
-    for k, v in pairs(defaultConfig) do config[k] = v end
-    saveConfig(config)
-    showToast("✓ Config direset", "Semua setting kembali ke default", C.green)
-end)
-
--- Info Card
-local infoCard = Instance.new("Frame")
-infoCard.BackgroundColor3 = C.card
-infoCard.BorderSizePixel = 0
-infoCard.Size = UDim2.new(1, -4, 0, 80)
-infoCard.Parent = settingHolder
-corner(infoCard, 8)
-
-lbl(infoCard, "📌 Info", UDim2.new(0, 12, 0, 10), UDim2.new(1, -24, 0, 18), Enum.Font.GothamBold, 11, C.purpleHover)
-lbl(infoCard, "Afterlife Project v2.0\nStudio Lite + Delta Executor\nBy: ALIZZ", UDim2.new(0, 12, 0, 30), UDim2.new(1, -24, 0, 44), Enum.Font.Gotham, 9, C.muted).TextWrapped = true
-
-setLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-    settingHolder.CanvasSize = UDim2.new(0, 0, 0, setLayout.AbsoluteContentSize.Y + 20)
-end)
-
--- ============================================================
--- PAGE NAVIGATION
--- ============================================================
-local function setPage(name)
+local function setActivePage(name)
     activePage = name
-    for pName, page in pairs(pages) do
-        page.Visible = pName == name
+    for pageName, page in pairs(pages) do
+        page.Visible = pageName == name
     end
-    for nName, info in pairs(navButtons) do
-        local active = nName == name
-        info.btn.BackgroundColor3 = active and C.card or C.sidebar
+    for navName, info in pairs(navButtons) do
+        local active = navName == name
+        info.button.BackgroundColor3 = active and C.card or C.sidebar
         info.bar.Visible = active
         info.icon.TextColor3 = active and C.purpleHover or C.muted
         info.text.TextColor3 = active and C.text or C.muted
     end
-    
-    if name == "ASSETS" then
+    if name == "Overview" then
         pageTitle.Text = "Dashboard"
-        pageSub.Text = "Manage your local assets"
-    elseif name == "TOOLBOX" then
-        pageTitle.Text = "Toolbox"
-        pageSub.Text = "Search & spawn models"
-    elseif name == "PLUGINS" then
-        pageTitle.Text = "Plugins"
-        pageSub.Text = "Manage your plugins"
-    elseif name == "BUY ACC" then
-        pageTitle.Text = "Buy Account"
-        pageSub.Text = "VIP membership"
-    elseif name == "SETTINGS" then
+        pageSubTitle.Text = "Manage your local Roblox assets seamlessly."
+    elseif name == "Assets" then
+        pageTitle.Text = "Assets"
+        pageSubTitle.Text = "Browse and import local RBXM files."
+    elseif name == "Settings" then
         pageTitle.Text = "Settings"
-        pageSub.Text = "App configuration"
+        pageSubTitle.Text = "Information about the importer workflow."
     end
 end
 
-for name, info in pairs(navButtons) do
-    info.btn.MouseButton1Click:Connect(function()
-        setPage(name)
-    end)
-end
-
-closeBtn.MouseButton1Click:Connect(function()
-    app.Visible = false
-    toggleBtn.Visible = true
-end)
-
-toggleBtn.MouseButton1Click:Connect(function()
-    app.Visible = not app.Visible
-    toggleBtn.Visible = not app.Visible
-    if app.Visible and config.autoScan then
-        task.wait(0.3)
-        -- auto scan kalo path tersimpan ada
-        if pathInput.Text ~= "" then
-            -- trigger scan otomatis
-        end
+local function clearAssetRows()
+    for _, item in ipairs(rowObjects) do
+        item:Destroy()
     end
-end)
-
--- ============================================================
--- ASSETS FUNCTIONS
--- ============================================================
-local entries = {}
-local rowObjects = {}
-local scanning = false
-local importing = false
-
-local function clearRows()
-    for _, r in ipairs(rowObjects) do r:Destroy() end
     rowObjects = {}
 end
 
-local function importFile(entry)
+local function importAsset(entry)
     local ok, result = pcall(function()
         return InsertService:LoadLocalAsset(entry.path)
     end)
     if not ok then
         entry.failed = true
-        entry.error = cleanErr(result)
+        entry.error = cleanError(result)
         return false, entry.error
     end
-    if not result or typeof(result) ~= "Instance" then
+    if result == nil or typeof(result) ~= "Instance" then
         entry.failed = true
-        entry.error = "LoadLocalAsset gak balikin Instance"
-        return false
+        entry.error = "LoadLocalAsset tidak mengembalikan Instance"
+        return false, entry.error
     end
-    local ok2, err2 = pcall(function()
+
+    local parentOK, parentError = pcall(function()
         result.Parent = Workspace
     end)
-    if not ok2 then
-        pcall(function() result:Destroy() end)
+    if not parentOK then
+        pcall(function()
+            result:Destroy()
+        end)
         entry.failed = true
-        entry.error = cleanErr(err2)
+        entry.error = cleanError(parentError)
         return false, entry.error
     end
+
     entry.imported = true
     entry.failed = false
     entry.root = result
-    
-    config.totalImported = (config.totalImported or 0) + 1
-    saveConfig(config)
-    vipNum.Text = tostring(config.totalImported)
-    
     return true, result
 end
 
-local function renderList()
-    clearRows()
-    if #entries == 0 then
-        emptyLbl.Visible = true
-        assetList.CanvasSize = UDim2.new(0, 0, 0, 0)
-        return
-    end
-    emptyLbl.Visible = false
-    
-    for i, entry in ipairs(entries) do
-        local row = Instance.new("Frame")
-        row.BackgroundColor3 = C.card2
-        row.BorderSizePixel = 0
-        row.Size = UDim2.new(1, -4, 0, 52)
-        row.LayoutOrder = i
-        row.Parent = assetList
-        corner(row, 8)
-        
-        local iconBox = Instance.new("Frame")
-        iconBox.BackgroundColor3 = C.panel
-        iconBox.BorderSizePixel = 0
-        iconBox.Position = UDim2.new(0, 8, 0.5, -16)
-        iconBox.Size = UDim2.new(0, 32, 0, 32)
-        iconBox.Parent = row
-        corner(iconBox, 7)
-        stroke(iconBox, C.purple2, 0.5, 1)
-        local iconTxt = lbl(iconBox, "📁", UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 1, 0), Enum.Font.GothamBold, 14, C.purpleHover)
-        iconTxt.TextXAlignment = Enum.TextXAlignment.Center
-        iconTxt.TextYAlignment = Enum.TextYAlignment.Center
-        
-        local nameLbl = lbl(row, entry.name, UDim2.new(0, 48, 0, 8), UDim2.new(1, -150, 0, 16), Enum.Font.GothamBold, 10, C.text)
-        nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
-        
-        local statusText, statusColor
-        if entry.failed then
-            statusText, statusColor = "ERROR", C.red
-        elseif entry.imported then
-            statusText, statusColor = "✓ IMPORTED", C.green
-        else
-            statusText, statusColor = "Ready", C.yellow
-        end
-        lbl(row, statusText, UDim2.new(0, 48, 0, 28), UDim2.new(1, -150, 0, 14), Enum.Font.Gotham, 9, statusColor)
-        
-        local importBtn = btn(row, entry.imported and "IMPORT LAGI" or "IMPORT", UDim2.new(1, -100, 0.5, -13), UDim2.new(0, 92, 0, 26), C.purple2, 9)
-        hover(importBtn, C.purple2, C.purple)
-        
-        importBtn.MouseButton1Click:Connect(function()
-            if importing or scanning then return end
-            importing = true
-            importBtn.Active = false
-            showToast("⏳ Importing...", entry.name, C.yellow)
-            local ok, res = importFile(entry)
-            if ok then
-                showToast("✓ Berhasil!", entry.name .. " dimasukkan ke Workspace", C.green)
+local function renderAssetList()
+    clearAssetRows()
+    local query = string.lower(assetSearch.Text or "")
+    local shown = 0
+
+    for _, entry in ipairs(entries) do
+        local matchesFilter = currentFilter == "ALL" or currentFilter == entry.type
+        local matchesSearch = query == "" or string.find(string.lower(entry.name), query, 1, true) ~= nil
+        if matchesFilter and matchesSearch then
+            shown = shown + 1
+            local row = Instance.new("Frame")
+            row.Size = UDim2.new(1, -4, 0, 64)
+            row.LayoutOrder = shown
+            row.BackgroundColor3 = C.card2
+            row.BorderSizePixel = 0
+            row.Parent = assetList
+            corner(row, 9)
+
+            local icon = label(row, "RB", UDim2.new(0, 11, 0.5, -19), UDim2.new(0, 38, 0, 38), Enum.Font.GothamBold, 11, C.purpleHover)
+            icon.BackgroundColor3 = C.input
+            icon.BackgroundTransparency = 0
+            icon.TextXAlignment = Enum.TextXAlignment.Center
+            icon.TextYAlignment = Enum.TextYAlignment.Center
+            corner(icon, 9)
+
+            local name = label(row, entry.name, UDim2.new(0, 61, 0, 10), UDim2.new(1, -180, 0, 18), Enum.Font.GothamBold, 11, C.text)
+            name.TextTruncate = Enum.TextTruncate.AtEnd
+            local path = label(row, entry.path, UDim2.new(0, 61, 0, 31), UDim2.new(1, -180, 0, 14), Enum.Font.Code, 8, C.muted)
+            path.TextTruncate = Enum.TextTruncate.AtEnd
+
+            local statusText
+            local statusColor
+            if entry.failed then
+                statusText = "ERROR"
+                statusColor = C.red
+            elseif entry.imported then
+                statusText = "IMPORTED"
+                statusColor = C.green
             else
-                showToast("✗ Gagal", tostring(res), C.red)
+                statusText = "READY"
+                statusColor = C.yellow
             end
-            importing = false
-            importBtn.Active = true
-            renderList()
-        end)
-        
-        rowObjects[#rowObjects + 1] = row
+            local status = label(row, statusText, UDim2.new(1, -110, 0, 10), UDim2.new(0, 94, 0, 15), Enum.Font.GothamBold, 8, statusColor)
+            status.TextXAlignment = Enum.TextXAlignment.Right
+
+            local import = button(row, entry.imported and "AGAIN" or "IMPORT", UDim2.new(1, -101, 0.5, -14), UDim2.new(0, 90, 0, 28), C.purple2, 9)
+            import.TextColor3 = entry.failed and C.red or C.text
+            addHover(import, C.purple2, C.purple)
+            import.MouseButton1Click:Connect(function()
+                if importing or scanning then
+                    return
+                end
+                importing = true
+                import.Active = false
+                setStatus("Importing native: " .. entry.name, C.yellow)
+                local ok, result = importAsset(entry)
+                if ok then
+                    setStatus("Import selesai: " .. entry.name, C.green)
+                else
+                    setStatus("ERROR ASLI: " .. tostring(result), C.red)
+                end
+                importing = false
+                renderAssetList()
+            end)
+
+            local errorLine = label(row, entry.failed and ("  " .. tostring(entry.error)) or "", UDim2.new(0, 61, 0, 48), UDim2.new(1, -175, 0, 11), Enum.Font.Gotham, 8, C.red)
+            errorLine.TextTruncate = Enum.TextTruncate.AtEnd
+            rowObjects[#rowObjects + 1] = row
+        end
     end
-    
-    assetList.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 20)
+
+    assetEmpty.Visible = shown == 0
+    if shown == 0 then
+        assetEmpty.Text = #entries == 0 and "Belum ada file.\nTekan Rescan Assets untuk mencari RBXM." or "Tidak ada hasil yang cocok."
+    end
+    assetList.CanvasSize = UDim2.new(0, 0, 0, assetLayout.AbsoluteContentSize.Y + 14)
+    updateStats()
 end
 
-local function doScan()
-    if scanning or importing then return end
-    local folder = normalizePath(pathInput.Text or "")
-    if folder == "" then
-        showToast("✗ Error", "Path folder kosong!", C.red)
+for name, item in pairs(navButtons) do
+    item.button.MouseButton1Click:Connect(function()
+        setActivePage(name)
+    end)
+end
+
+local function rescan()
+    if scanning or importing then
         return
     end
-    
-    config.lastPath = folder
-    saveConfig(config)
-    
+    local folder = normalizePath(folderBox and folderBox.Text or "")
+    if folder == "" then
+        setStatus("Folder path belum diisi.", C.red)
+        return
+    end
+
     scanning = true
-    scanBtn.Active = false
-    scanBtn.Text = "⏳ SCANNING..."
-    showToast("⏳ Scanning...", folder, C.yellow)
-    
+    rescanButton.Active = false
+    rescanButton.Text = "↻    Scanning..."
+    overviewRescan.Active = false
+    overviewRescan.Text = "↻    Scanning..."
+    setStatus("Scanning local assets...", C.yellow)
+
     task.spawn(function()
-        local ok, result = pcall(scanFolder, folder, true)
+        local ok, result = pcall(collectRbxmFiles, folder, scanSubfolders)
         if not ok then
-            showToast("✗ Scan Error", cleanErr(result), C.red)
+            setStatus("ERROR ASLI: " .. cleanError(result), C.red)
         else
             entries = {}
             for _, path in ipairs(result) do
                 entries[#entries + 1] = {
                     path = path,
-                    name = fname(path),
+                    name = fileName(path),
+                    type = "RBXM",
                     imported = false,
                     failed = false,
                 }
             end
-            totalNum.Text = tostring(#entries)
-            renderList()
+            renderAssetList()
             if #entries == 0 then
-                showToast("ℹ️ Info", "Gak ada file RBXM di folder itu", C.yellow)
+                setStatus("Tidak ada file .rbxm ditemukan.", C.yellow)
             else
-                showToast("✓ Ditemukan!", #entries .. " file RBXM", C.green)
+                setStatus(string.format("Ditemukan %d file RBXM.", #entries), C.green)
             end
         end
-        scanBtn.Active = true
-        scanBtn.Text = "🔍 SCAN"
+        rescanButton.Active = true
+        rescanButton.Text = "↻    Rescan Assets"
+        overviewRescan.Active = true
+        overviewRescan.Text = "↻   Rescan local assets"
         scanning = false
     end)
 end
 
-scanBtn.MouseButton1Click:Connect(doScan)
+scanPageButton.MouseButton1Click:Connect(rescan)
 
-importAllBtn.MouseButton1Click:Connect(function()
-    if #entries == 0 then
-        showToast("ℹ️ Info", "Belum ada file. Scan dulu!", C.yellow)
-        return
-    end
-    if importing then return end
-    importing = true
-    showToast("⏳ Import All...", "Mengimport " .. #entries .. " file", C.yellow)
-    
-    task.spawn(function()
-        local success, failed = 0, 0
-        for i, entry in ipairs(entries) do
-            if not entry.imported then
-                local ok = importFile(entry)
-                if ok then success = success + 1 else failed = failed + 1 end
-                renderList()
-                task.wait(0.1)
-            end
-        end
-        showToast("✓ Selesai!", success .. " berhasil, " .. failed .. " gagal", C.green)
-        importing = false
-        renderList()
-    end)
+rescanButton.MouseButton1Click:Connect(function()
+    setActivePage("Assets")
+    rescan()
+end)
+overviewRescan.MouseButton1Click:Connect(function()
+    setActivePage("Assets")
+    rescan()
+end)
+openAssetsButton.MouseButton1Click:Connect(function()
+    setActivePage("Assets")
 end)
 
-clearBtn.MouseButton1Click:Connect(function()
-    entries = {}
-    totalNum.Text = "0"
-    renderList()
-    showToast("🗑️ List dibersihkan", "Semua item dihapus dari list", C.muted)
-end)
-
-refreshBtn.MouseButton1Click:Connect(function()
-    doScan()
-end)
-
--- ============================================================
--- TOOLBOX FUNCTIONS (WORKING!)
--- ============================================================
-local tbEntries = {}
-local tbRows = {}
-
-local function clearTbRows()
-    for _, r in ipairs(tbRows) do r:Destroy() end
-    tbRows = {}
-end
-
-local function spawnFromToolbox(assetId, name)
-    local ok, model = pcall(function()
-        return InsertService:LoadAsset(assetId)
-    end)
-    if not ok or not model then
-        showToast("✗ Gagal", "Gak bisa load asset ID: " .. assetId, C.red)
-        return false
-    end
-    
-    -- Setup model
-    local success = pcall(function()
-        for _, child in ipairs(model:GetChildren()) do
-            if child:IsA("BasePart") then
-                child.Anchored = true
-            end
-        end
-    end)
-    
-    model.Name = name or ("Toolbox_" .. assetId)
-    model.Parent = Workspace
-    
-    -- Pindahin ke depan player
-    pcall(function()
-        local char = LocalPlayer.Character
-        if char then
-            local root = char:FindFirstChild("HumanoidRootPart")
-            if root then
-                local offset = root.CFrame + (root.CFrame.LookVector * 10) + Vector3.new(0, 3, 0)
-                model:PivotTo(offset)
-            end
-        end
-    end)
-    
-    showToast("✓ Spawned!", model.Name .. " muncul di depan lo", C.green)
-    return true
-end
-
-local function renderToolboxResults(results)
-    clearTbRows()
-    if #results == 0 then
-        tbEmpty.Visible = true
-        tbEmpty.Text = "Gak ada hasil. Coba keyword lain."
-        toolboxList.CanvasSize = UDim2.new(0, 0, 0, 0)
-        return
-    end
-    tbEmpty.Visible = false
-    
-    for i, item in ipairs(results) do
-        local row = Instance.new("Frame")
-        row.BackgroundColor3 = C.card2
-        row.BorderSizePixel = 0
-        row.Size = UDim2.new(1, -4, 0, 60)
-        row.LayoutOrder = i
-        row.Parent = toolboxList
-        corner(row, 8)
-        
-        local iconBox = Instance.new("Frame")
-        iconBox.BackgroundColor3 = C.panel
-        iconBox.BorderSizePixel = 0
-        iconBox.Position = UDim2.new(0, 8, 0.5, -20)
-        iconBox.Size = UDim2.new(0, 40, 0, 40)
-        iconBox.Parent = row
-        corner(iconBox, 8)
-        stroke(iconBox, C.purple2, 0.5, 1)
-        local iconTxt = lbl(iconBox, "📦", UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 1, 0), Enum.Font.GothamBold, 18, C.purpleHover)
-        iconTxt.TextXAlignment = Enum.TextXAlignment.Center
-        iconTxt.TextYAlignment = Enum.TextYAlignment.Center
-        
-        local nameLbl = lbl(row, item.Name, UDim2.new(0, 58, 0, 8), UDim2.new(1, -170, 0, 16), Enum.Font.GothamBold, 10, C.text)
-        nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
-        lbl(row, "ID: " .. item.AssetId, UDim2.new(0, 58, 0, 28), UDim2.new(1, -170, 0, 14), Enum.Font.Code, 9, C.muted)
-        lbl(row, "by " .. (item.CreatorName or "Unknown"), UDim2.new(0, 58, 0, 44), UDim2.new(1, -170, 0, 12), Enum.Font.Gotham, 8, C.dim)
-        
-        local spawnBtn = btn(row, "📥 SPAWN", UDim2.new(1, -100, 0.5, -13), UDim2.new(0, 92, 0, 26), C.purple2, 9)
-        hover(spawnBtn, C.purple2, C.purple)
-        spawnBtn.MouseButton1Click:Connect(function()
-            spawnBtn.Active = false
-            spawnBtn.Text = "⏳..."
-            task.spawn(function()
-                spawnFromToolbox(item.AssetId, item.Name)
-                spawnBtn.Active = true
-                spawnBtn.Text = "📥 SPAWN"
-            end)
-        end)
-        
-        tbRows[#tbRows + 1] = row
-    end
-    
-    toolboxList.CanvasSize = UDim2.new(0, 0, 0, tbLayout.AbsoluteContentSize.Y + 20)
-end
-
-local function searchToolbox()
-    local keyword = searchBox.Text
-    if keyword == "" then
-        showToast("✗ Error", "Ketik keyword dulu!", C.red)
-        return
-    end
-    
-    searchBtn.Active = false
-    searchBtn.Text = "⏳ SEARCHING..."
-    showToast("🔍 Mencari...", keyword, C.yellow)
-    
-    task.spawn(function()
-        local ok, result = pcall(function()
-            local url = "https://apis.roblox.com/toolbox-service/v1/marketplace/10?keyword=" .. HttpService:UrlEncode(keyword) .. "&limit=20"
-            local response = HttpService:GetAsync(url, true)
-            return HttpService:JSONDecode(response)
-        end)
-        
-        if not ok then
-            showToast("✗ Error", "Gagal search: " .. cleanErr(result), C.red)
-        else
-            local items = {}
-            for _, item in ipairs(result.data or {}) do
-                table.insert(items, {
-                    AssetId = item.id,
-                    Name = item.name or ("Asset_" .. item.id),
-                    CreatorName = item.creatorName or "Unknown",
-                })
-            end
-            renderToolboxResults(items)
-            if #items > 0 then
-                showToast("✓ Ditemukan!", #items .. " model untuk '" .. keyword .. "'", C.green)
+for name, item in pairs(filters) do
+    item.MouseButton1Click:Connect(function()
+        currentFilter = name
+        for otherName, other in pairs(filters) do
+            if otherName == currentFilter then
+                other.BackgroundColor3 = C.purple2
+                other.TextColor3 = C.text
             else
-                showToast("ℹ️ Kosong", "Gak ada hasil buat '" .. keyword .. "'", C.yellow)
+                other.BackgroundColor3 = C.input
+                other.TextColor3 = C.muted
             end
         end
-        
-        searchBtn.Active = true
-        searchBtn.Text = "🔍 CARI"
+        renderAssetList()
     end)
 end
+filters.ALL.BackgroundColor3 = C.purple2
+filters.ALL.TextColor3 = C.text
+assetSearch:GetPropertyChangedSignal("Text"):Connect(renderAssetList)
 
-searchBtn.MouseButton1Click:Connect(searchToolbox)
-searchBox.FocusLost:Connect(function(enter)
-    if enter then searchToolbox() end
+-- Splash screen seperti asset manager pada screenshot.
+local splash = Instance.new("Frame")
+splash.Name = "Splash"
+splash.BackgroundColor3 = C.black
+splash.BorderSizePixel = 0
+splash.Size = UDim2.new(1, 0, 1, 0)
+splash.ZIndex = 50
+splash.Parent = screenGui
+
+local splashCard = Instance.new("Frame")
+splashCard.BackgroundColor3 = C.black
+splashCard.BorderSizePixel = 0
+splashCard.Position = UDim2.new(0.5, 0, 0.52, 0)
+splashCard.AnchorPoint = Vector2.new(0.5, 0.5)
+splashCard.Size = UDim2.new(0.78, 0, 0, 250)
+splashCard.ZIndex = 51
+splashCard.Parent = splash
+corner(splashCard, 15)
+stroke(splashCard, C.line, 0.12, 1)
+
+local splashIcon = label(splashCard, "R", UDim2.new(0.5, -25, 0, 29), UDim2.new(0, 50, 0, 50), Enum.Font.GothamBold, 22, C.purpleHover)
+splashIcon.BackgroundColor3 = C.card
+splashIcon.BackgroundTransparency = 0
+splashIcon.TextXAlignment = Enum.TextXAlignment.Center
+splashIcon.TextYAlignment = Enum.TextYAlignment.Center
+splashIcon.ZIndex = 52
+corner(splashIcon, 13)
+local splashTitle = label(splashCard, "RBXM ASSET HUB", UDim2.new(0, 0, 0, 91), UDim2.new(1, 0, 0, 25), Enum.Font.GothamBold, 18, C.text)
+splashTitle.TextXAlignment = Enum.TextXAlignment.Center
+splashTitle.ZIndex = 52
+local splashSub = label(splashCard, "ADVANCED ASSET MANAGEMENT", UDim2.new(0, 0, 0, 119), UDim2.new(1, 0, 0, 16), Enum.Font.Gotham, 9, C.muted)
+splashSub.TextXAlignment = Enum.TextXAlignment.Center
+splashSub.ZIndex = 52
+local splashStatus = label(splashCard, "INITIALIZING NATIVE LOADER...", UDim2.new(0, 0, 0, 151), UDim2.new(1, 0, 0, 16), Enum.Font.GothamBold, 9, C.purpleHover)
+splashStatus.TextXAlignment = Enum.TextXAlignment.Center
+splashStatus.ZIndex = 52
+
+local progressBack = Instance.new("Frame")
+progressBack.BackgroundColor3 = C.input
+progressBack.BorderSizePixel = 0
+progressBack.Position = UDim2.new(0.1, 0, 0, 181)
+progressBack.Size = UDim2.new(0.8, 0, 0, 9)
+progressBack.ZIndex = 52
+progressBack.Parent = splashCard
+corner(progressBack, 5)
+local progressFill = Instance.new("Frame")
+progressFill.BackgroundColor3 = C.purple
+progressFill.BorderSizePixel = 0
+progressFill.Size = UDim2.new(0, 0, 1, 0)
+progressFill.ZIndex = 53
+progressFill.Parent = progressBack
+corner(progressFill, 5)
+local progressText = label(splashCard, "0%", UDim2.new(0.1, 0, 0, 198), UDim2.new(0.8, 0, 0, 16), Enum.Font.Code, 9, C.muted)
+progressText.TextXAlignment = Enum.TextXAlignment.Left
+progressText.ZIndex = 52
+local splashVersion = label(splashCard, "NATIVE  •  STUDIO LITE", UDim2.new(0.1, 0, 0, 198), UDim2.new(0.8, 0, 0, 16), Enum.Font.Code, 9, C.muted)
+splashVersion.TextXAlignment = Enum.TextXAlignment.Right
+splashVersion.ZIndex = 52
+
+setActivePage("Overview")
+renderAssetList()
+
+-- Startup progress tanpa Output spam.
+task.spawn(function()
+    local stages = {
+        {25, "LOADING UI..."},
+        {55, "READYING ASSET SCANNER..."},
+        {85, "FINALIZING ENVIRONMENT..."},
+        {100, "READY"},
+    }
+    for _, stage in ipairs(stages) do
+        splashStatus.Text = stage[2]
+        progressText.Text = tostring(stage[1]) .. "%"
+        TweenService:Create(progressFill, TweenInfo.new(0.22), {Size = UDim2.new(stage[1] / 100, 0, 1, 0)}):Play()
+        task.wait(0.26)
+    end
+    task.wait(0.18)
+    app.Visible = true
+    backdrop.Visible = true
+    toggleButton.Visible = true
+    splash.Visible = false
 end)
-
--- ============================================================
--- PLUGINS FUNCTIONS (WORKING!)
--- ============================================================
-local pluginFiles = {}
-local pluginRows = {}
-
-local function clearPluginRows()
-    for _, r in ipairs(pluginRows) do r:Destroy() end
-    pluginRows = {}
-end
-
-local function loadPlugin(path)
-    if not readfile then
-        showToast("✗ Gagal", "Executor gak support readfile", C.red)
-        return
-    end
-    local ok, code = pcall(readfile, path)
-    if not ok or not code then
-        showToast("✗ Gagal", "Gak bisa baca file: " .. fname(path), C.red)
-        return
-    end
-    local ok2, fn = pcall(loadstring, code)
-    if not ok2 or not fn then
-        showToast("✗ Gagal", "Script error di " .. fname(path), C.red)
-        return
-    end
-    local ok3, err = pcall(fn)
-    if not ok3 then
-        showToast("⚠️ Warning", "Plugin ada error: " .. cleanErr(err), C.yellow)
-    else
-        showToast("✓ Plugin loaded!", fname(path), C.green)
-    end
-end
-
-local function renderPlugins(files)
-    clearPluginRows()
-    if #files == 0 then
-        plEmpty.Visible = true
-        pluginList.CanvasSize = UDim2.new(0, 0, 0, 0)
-        return
-    end
-    plEmpty.Visible = false
-    
-    for i, path in ipairs(files) do
-        local row = Instance.new("Frame")
-        row.BackgroundColor3 = C.card2
-        row.BorderSizePixel = 0
-        row.Size = UDim2.new(1, -4, 0, 46)
-        row.LayoutOrder = i
-        row.Parent = pluginList
-        corner(row, 8)
-        
-        local iconBox = Instance.new("Frame")
-        iconBox.BackgroundColor3 = C.panel
-        iconBox.BorderSizePixel = 0
-        iconBox.Position = UDim2.new(0, 8, 0.5, -14)
-        iconBox.Size = UDim2.new(0, 28, 0, 28)
-        iconBox.Parent = row
-        corner(iconBox, 6)
-        stroke(iconBox, C.purple2, 0.5, 1)
-        local iconTxt = lbl(iconBox, "⚙", UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 1, 0), Enum.Font.GothamBold, 13, C.purpleHover)
-        iconTxt.TextXAlignment = Enum.TextXAlignment.Center
-        iconTxt.TextYAlignment = Enum.TextYAlignment.Center
-        
-        local nameLbl = lbl(row, fname(path), UDim2.new(0, 44, 0, 8), UDim2.new(1, -140, 0, 16), Enum.Font.GothamBold, 10, C.text)
-        nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
-        lbl(row, path, UDim2.new(0, 44, 0, 26), UDim2.new(1, -140, 0, 12), Enum.Font.Code, 8, C.muted).TextTruncate = Enum.TextTruncate.AtEnd
-        
-        local loadBtn = btn(row, "▶ LOAD", UDim2.new(1, -88, 0.5, -12), UDim2.new(0, 80, 0, 24), C.purple2, 9)
-        hover(loadBtn, C.purple2, C.purple)
-        loadBtn.MouseButton1Click:Connect(function()
-            loadPlugin(path)
-        end)
-        
-        pluginRows[#pluginRows + 1] = row
-    end
-    
-    pluginList.CanvasSize = UDim2.new(0, 0, 0, plLayout.AbsoluteContentSize.Y + 20)
-end
-
-scanPluginsBtn.MouseButton1Click:Connect(function()
-    local folder = normalizePath(pluginPathInput.Text or "")
-    if folder == "" then
-        showToast("✗ Error", "Isi path dulu!", C.red)
-        return
-    end
-    
-    scanPluginsBtn.Active = false
-    scanPluginsBtn.Text = "⏳..."
-    showToast("⏳ Scan plugins...", folder, C.yellow)
-    
-    task.spawn(function()
-        local ok, files = pcall(function()
-            local result = {}
-            local listFn = getFunc("listfiles")
-            if not listFn then error("Gak support listfiles") end
-            local items = listFn(folder)
-            for _, item in ipairs(items) do
-                local lower = string.lower(item)
-                if lower:sub(-4) == ".lua" or lower:sub(-5) == ".luau" then
-                    table.insert(result, item)
-                end
-            end
-            return result
-        end)
-        
-        if ok then
-            pluginFiles = files
-            renderPlugins(files)
-            showToast("✓ Ditemukan!", #files .. " plugin", C.green)
-        else
-            showToast("✗ Error", cleanErr(files), C.red)
-        end
-        
-        scanPluginsBtn.Active = true
-        scanPluginsBtn.Text = "🔍 SCAN"
-    end)
-end)
-
--- ============================================================
--- INIT
--- ============================================================
-setPage("ASSETS")
-
--- Toast pembuka
-task.wait(0.5)
-showToast("👑 Afterlife Project v2.0", "Semua fitur aktif! Klik R buat buka panel", C.purple)
-
-print("[Afterlife Project v2.0] ✅ Loaded - All features working!")
