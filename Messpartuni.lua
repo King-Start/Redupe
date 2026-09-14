@@ -1,30 +1,47 @@
 --[[
-    RBXM Importer - Studio Lite / executor LocalScript
-    Versi bersih, tidak di-obfuscate.
+    RBXM Importer Premium - Studio Lite / executor LocalScript
+    Fokus: scan folder, verifikasi RBXM, lalu import file valid.
 
-    Cara pakai:
-    1. Pastikan executor menyediakan readfile(path).
-    2. Masukkan path file .rbxm pada kotak input.
-    3. Tekan Import RBXM.
+    Executor yang dibutuhkan:
+    - readfile(path)
+    - listfiles(folder)
+    - opsional: isfolder(path) untuk scan subfolder
 
-    Catatan:
-    - Parser ini membaca RBXM binary normal dan chunk LZ4.
-    - Zstandard hanya bisa dipakai bila executor menyediakan fungsi decompressor.
-    - Objek hasil dibuat langsung di Workspace, tanpa wrapper tambahan.
-    - Script di dalam model dibuat Disabled secara default agar file tidak langsung
-      menjalankan kode asing. Ubah DISABLE_IMPORTED_SCRIPTS menjadi false jika perlu.
+    File yang gagal dibaca, header-nya salah, chunk-nya rusak, atau property-nya
+    tidak dapat dianalisis akan ditandai REJECTED dan tidak akan di-import.
 ]]
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
 if LocalPlayer == nil then
     return
 end
 
+local Workspace = game:GetService("Workspace")
 local DISABLE_IMPORTED_SCRIPTS = true
-local GUI_NAME = "RBXMImporter_StudioLite"
+local GUI_NAME = "RBXMImporter_Premium"
 local ORIGINAL_CLASS_ATTRIBUTE = "RBXMOriginalClass"
+local MAX_SCAN_DEPTH = 8
+local MAX_FILES = 500
+
+local COLORS = {
+    background = Color3.fromRGB(13, 16, 25),
+    panel = Color3.fromRGB(20, 24, 36),
+    card = Color3.fromRGB(26, 31, 45),
+    cardAlt = Color3.fromRGB(31, 37, 54),
+    input = Color3.fromRGB(36, 42, 60),
+    border = Color3.fromRGB(67, 77, 106),
+    text = Color3.fromRGB(244, 247, 255),
+    muted = Color3.fromRGB(157, 168, 192),
+    accent = Color3.fromRGB(111, 94, 255),
+    accentHover = Color3.fromRGB(132, 116, 255),
+    cyan = Color3.fromRGB(73, 200, 224),
+    green = Color3.fromRGB(90, 218, 151),
+    red = Color3.fromRGB(255, 108, 126),
+    yellow = Color3.fromRGB(245, 201, 91),
+}
 
 local playerGui = LocalPlayer:WaitForChild("PlayerGui")
 local oldGui = playerGui:FindFirstChild(GUI_NAME)
@@ -41,113 +58,437 @@ screenGui.Parent = playerGui
 
 local panel = Instance.new("Frame")
 panel.Name = "Panel"
-panel.Size = UDim2.new(0, 360, 0, 190)
-panel.Position = UDim2.new(0.5, -180, 0.5, -95)
-panel.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
+panel.Size = UDim2.new(0.92, 0, 0.84, 0)
+panel.Position = UDim2.new(0.5, 0, 0.5, 0)
+panel.AnchorPoint = Vector2.new(0.5, 0.5)
+panel.BackgroundColor3 = COLORS.panel
 panel.BorderSizePixel = 0
 panel.Active = true
 panel.Parent = screenGui
 
+local sizeConstraint = Instance.new("UISizeConstraint")
+sizeConstraint.MinSize = Vector2.new(500, 400)
+sizeConstraint.MaxSize = Vector2.new(820, 620)
+sizeConstraint.Parent = panel
+
 local panelCorner = Instance.new("UICorner")
-panelCorner.CornerRadius = UDim.new(0, 12)
+panelCorner.CornerRadius = UDim.new(0, 16)
 panelCorner.Parent = panel
 
 local panelStroke = Instance.new("UIStroke")
-panelStroke.Color = Color3.fromRGB(90, 90, 110)
-panelStroke.Transparency = 0.35
+panelStroke.Color = COLORS.border
+panelStroke.Transparency = 0.25
+panelStroke.Thickness = 1
 panelStroke.Parent = panel
 
+local topBar = Instance.new("Frame")
+topBar.Name = "TopBar"
+topBar.BackgroundTransparency = 1
+topBar.Position = UDim2.new(0, 18, 0, 12)
+topBar.Size = UDim2.new(1, -36, 0, 38)
+topBar.Active = true
+topBar.Parent = panel
+
+local brandMark = Instance.new("TextLabel")
+brandMark.BackgroundColor3 = COLORS.accent
+brandMark.BorderSizePixel = 0
+brandMark.Size = UDim2.new(0, 34, 0, 34)
+brandMark.Font = Enum.Font.GothamBold
+brandMark.TextSize = 14
+brandMark.TextColor3 = COLORS.text
+brandMark.Text = "R"
+brandMark.Parent = topBar
+local brandCorner = Instance.new("UICorner")
+brandCorner.CornerRadius = UDim.new(0, 10)
+brandCorner.Parent = brandMark
+
 local title = Instance.new("TextLabel")
-title.Name = "Title"
 title.BackgroundTransparency = 1
-title.Position = UDim2.new(0, 14, 0, 8)
-title.Size = UDim2.new(1, -28, 0, 26)
+title.Position = UDim2.new(0, 45, 0, 0)
+title.Size = UDim2.new(1, -100, 0, 20)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 16
-title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextColor3 = COLORS.text
 title.TextXAlignment = Enum.TextXAlignment.Left
-title.Text = "RBXM Importer"
-title.Parent = panel
+title.Text = "RBXM VAULT"
+title.Parent = topBar
 
-local pathBox = Instance.new("TextBox")
-pathBox.Name = "Path"
-pathBox.Position = UDim2.new(0, 14, 0, 45)
-pathBox.Size = UDim2.new(1, -28, 0, 38)
-pathBox.BackgroundColor3 = Color3.fromRGB(43, 43, 52)
-pathBox.BorderSizePixel = 0
-pathBox.ClearTextOnFocus = false
-pathBox.Font = Enum.Font.Code
-pathBox.TextSize = 13
-pathBox.TextColor3 = Color3.fromRGB(240, 240, 245)
-pathBox.PlaceholderColor3 = Color3.fromRGB(145, 145, 155)
-pathBox.PlaceholderText = "path file .rbxm, contoh: model.rbxm"
-pathBox.Text = "model.rbxm"
-pathBox.TextXAlignment = Enum.TextXAlignment.Left
-pathBox.Parent = panel
+local subtitle = Instance.new("TextLabel")
+subtitle.BackgroundTransparency = 1
+subtitle.Position = UDim2.new(0, 46, 0, 19)
+subtitle.Size = UDim2.new(1, -105, 0, 15)
+subtitle.Font = Enum.Font.Gotham
+subtitle.TextSize = 10
+subtitle.TextColor3 = COLORS.muted
+subtitle.TextXAlignment = Enum.TextXAlignment.Left
+subtitle.Text = "Verified model importer  •  Studio Lite"
+subtitle.Parent = topBar
 
-local pathPadding = Instance.new("UIPadding")
-pathPadding.PaddingLeft = UDim.new(0, 10)
-pathPadding.PaddingRight = UDim.new(0, 10)
-pathPadding.Parent = pathBox
+local closeButton = Instance.new("TextButton")
+closeButton.BackgroundColor3 = COLORS.cardAlt
+closeButton.BorderSizePixel = 0
+closeButton.Position = UDim2.new(1, -34, 0, 2)
+closeButton.Size = UDim2.new(0, 32, 0, 30)
+closeButton.Font = Enum.Font.GothamBold
+closeButton.TextSize = 16
+closeButton.TextColor3 = COLORS.muted
+closeButton.Text = "×"
+closeButton.AutoButtonColor = false
+closeButton.Parent = topBar
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 8)
+closeCorner.Parent = closeButton
 
-local pathCorner = Instance.new("UICorner")
-pathCorner.CornerRadius = UDim.new(0, 7)
-pathCorner.Parent = pathBox
+local statusDot = Instance.new("TextLabel")
+statusDot.BackgroundTransparency = 1
+statusDot.Position = UDim2.new(1, -84, 0, 8)
+statusDot.Size = UDim2.new(0, 20, 0, 20)
+statusDot.Font = Enum.Font.GothamBold
+statusDot.TextSize = 14
+statusDot.TextColor3 = COLORS.green
+statusDot.Text = "●"
+statusDot.Parent = topBar
 
-local importButton = Instance.new("TextButton")
-importButton.Name = "Import"
-importButton.Position = UDim2.new(0, 14, 0, 91)
-importButton.Size = UDim2.new(0, 150, 0, 36)
-importButton.BackgroundColor3 = Color3.fromRGB(55, 125, 220)
-importButton.BorderSizePixel = 0
-importButton.Font = Enum.Font.GothamBold
-importButton.TextSize = 13
-importButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-importButton.Text = "Import RBXM"
-importButton.AutoButtonColor = true
-importButton.Parent = panel
+local folderBox = Instance.new("TextBox")
+folderBox.Name = "FolderPath"
+folderBox.Position = UDim2.new(0, 18, 0, 60)
+folderBox.Size = UDim2.new(1, -142, 0, 36)
+folderBox.BackgroundColor3 = COLORS.input
+folderBox.BorderSizePixel = 0
+folderBox.ClearTextOnFocus = false
+folderBox.Font = Enum.Font.Code
+folderBox.TextSize = 12
+folderBox.TextColor3 = COLORS.text
+folderBox.PlaceholderColor3 = COLORS.muted
+folderBox.PlaceholderText = "Folder tujuan, contoh: /storage/emulated/0/Download"
+folderBox.Text = "."
+folderBox.TextXAlignment = Enum.TextXAlignment.Left
+folderBox.Parent = panel
+local folderPadding = Instance.new("UIPadding")
+folderPadding.PaddingLeft = UDim.new(0, 11)
+folderPadding.PaddingRight = UDim.new(0, 11)
+folderPadding.Parent = folderBox
+local folderCorner = Instance.new("UICorner")
+folderCorner.CornerRadius = UDim.new(0, 8)
+folderCorner.Parent = folderBox
 
-local importCorner = Instance.new("UICorner")
-importCorner.CornerRadius = UDim.new(0, 7)
-importCorner.Parent = importButton
+local scanButton = Instance.new("TextButton")
+scanButton.Name = "Scan"
+scanButton.Position = UDim2.new(1, -116, 0, 60)
+scanButton.Size = UDim2.new(0, 98, 0, 36)
+scanButton.BackgroundColor3 = COLORS.accent
+scanButton.BorderSizePixel = 0
+scanButton.Font = Enum.Font.GothamBold
+scanButton.TextSize = 12
+scanButton.TextColor3 = COLORS.text
+scanButton.Text = "SCAN FOLDER"
+scanButton.AutoButtonColor = false
+scanButton.Parent = panel
+local scanCorner = Instance.new("UICorner")
+scanCorner.CornerRadius = UDim.new(0, 8)
+scanCorner.Parent = scanButton
+
+local recursiveButton = Instance.new("TextButton")
+recursiveButton.Name = "Recursive"
+recursiveButton.Position = UDim2.new(0, 18, 0, 102)
+recursiveButton.Size = UDim2.new(0, 132, 0, 25)
+recursiveButton.BackgroundTransparency = 1
+recursiveButton.BorderSizePixel = 0
+recursiveButton.Font = Enum.Font.Gotham
+recursiveButton.TextSize = 11
+recursiveButton.TextColor3 = COLORS.muted
+recursiveButton.TextXAlignment = Enum.TextXAlignment.Left
+recursiveButton.Text = "↳  Subfolder: OFF"
+recursiveButton.AutoButtonColor = false
+recursiveButton.Parent = panel
+
+local function makeStatCard(position, titleText, valueColor)
+    local card = Instance.new("Frame")
+    card.BackgroundColor3 = COLORS.card
+    card.BorderSizePixel = 0
+    card.Position = position
+    card.Size = UDim2.new(0.333, -5, 1, 0)
+    card.Parent = panel
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = card
+
+    local label = Instance.new("TextLabel")
+    label.BackgroundTransparency = 1
+    label.Position = UDim2.new(0, 10, 0, 4)
+    label.Size = UDim2.new(1, -20, 0, 12)
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 9
+    label.TextColor3 = COLORS.muted
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Text = titleText
+    label.Parent = card
+
+    local value = Instance.new("TextLabel")
+    value.BackgroundTransparency = 1
+    value.Position = UDim2.new(0, 10, 0, 16)
+    value.Size = UDim2.new(1, -20, 0, 18)
+    value.Font = Enum.Font.GothamBold
+    value.TextSize = 15
+    value.TextColor3 = valueColor
+    value.TextXAlignment = Enum.TextXAlignment.Left
+    value.Text = "0"
+    value.Parent = card
+    return card, value
+end
+
+local summaryBar = Instance.new("Frame")
+summaryBar.BackgroundTransparency = 1
+summaryBar.Position = UDim2.new(0, 18, 0, 132)
+summaryBar.Size = UDim2.new(1, -36, 0, 40)
+summaryBar.Parent = panel
+
+local totalCard, totalValue = makeStatCard(UDim2.new(0, 0, 0, 0), "DISCOVERED", COLORS.cyan)
+totalCard.Parent = summaryBar
+local validCard, validValue = makeStatCard(UDim2.new(0.333, 2, 0, 0), "VERIFIED", COLORS.green)
+validCard.Parent = summaryBar
+local rejectedCard, rejectedValue = makeStatCard(UDim2.new(0.666, 4, 0, 0), "REJECTED", COLORS.red)
+rejectedCard.Parent = summaryBar
+
+local content = Instance.new("Frame")
+content.BackgroundTransparency = 1
+content.Position = UDim2.new(0, 18, 0, 182)
+content.Size = UDim2.new(1, -36, 1, -262)
+content.Parent = panel
+
+local fileCard = Instance.new("Frame")
+fileCard.Name = "FileCard"
+fileCard.BackgroundColor3 = COLORS.card
+fileCard.BorderSizePixel = 0
+fileCard.Size = UDim2.new(0.61, -5, 1, 0)
+fileCard.Parent = content
+local fileCardCorner = Instance.new("UICorner")
+fileCardCorner.CornerRadius = UDim.new(0, 10)
+fileCardCorner.Parent = fileCard
+
+local fileHeader = Instance.new("TextLabel")
+fileHeader.BackgroundTransparency = 1
+fileHeader.Position = UDim2.new(0, 12, 0, 8)
+fileHeader.Size = UDim2.new(0.38, 0, 0, 22)
+fileHeader.Font = Enum.Font.GothamBold
+fileHeader.TextSize = 11
+fileHeader.TextColor3 = COLORS.text
+fileHeader.TextXAlignment = Enum.TextXAlignment.Left
+fileHeader.Text = "RBXM FILES"
+fileHeader.Parent = fileCard
+
+local searchBox = Instance.new("TextBox")
+searchBox.Name = "Search"
+searchBox.Position = UDim2.new(0.40, 0, 0, 7)
+searchBox.Size = UDim2.new(0.58, -10, 0, 24)
+searchBox.BackgroundColor3 = COLORS.input
+searchBox.BorderSizePixel = 0
+searchBox.ClearTextOnFocus = false
+searchBox.Font = Enum.Font.Gotham
+searchBox.TextSize = 10
+searchBox.TextColor3 = COLORS.text
+searchBox.PlaceholderColor3 = COLORS.muted
+searchBox.PlaceholderText = "Search..."
+searchBox.Text = ""
+searchBox.TextXAlignment = Enum.TextXAlignment.Left
+searchBox.Parent = fileCard
+local searchPadding = Instance.new("UIPadding")
+searchPadding.PaddingLeft = UDim.new(0, 8)
+searchPadding.PaddingRight = UDim.new(0, 8)
+searchPadding.Parent = searchBox
+local searchCorner = Instance.new("UICorner")
+searchCorner.CornerRadius = UDim.new(0, 6)
+searchCorner.Parent = searchBox
+
+local fileList = Instance.new("ScrollingFrame")
+fileList.Name = "FileList"
+fileList.Position = UDim2.new(0, 8, 0, 37)
+fileList.Size = UDim2.new(1, -16, 1, -45)
+fileList.BackgroundTransparency = 1
+fileList.BorderSizePixel = 0
+fileList.ScrollBarThickness = 4
+fileList.ScrollBarImageColor3 = COLORS.border
+fileList.CanvasSize = UDim2.new(0, 0, 0, 0)
+fileList.AutomaticCanvasSize = Enum.AutomaticSize.None
+fileList.Parent = fileCard
+
+local fileLayout = Instance.new("UIListLayout")
+fileLayout.Padding = UDim.new(0, 5)
+fileLayout.SortOrder = Enum.SortOrder.LayoutOrder
+fileLayout.Parent = fileList
+
+local emptyLabel = Instance.new("TextLabel")
+emptyLabel.BackgroundTransparency = 1
+emptyLabel.Position = UDim2.new(0, 20, 0.5, -20)
+emptyLabel.Size = UDim2.new(1, -40, 0, 40)
+emptyLabel.Font = Enum.Font.Gotham
+emptyLabel.TextSize = 11
+emptyLabel.TextColor3 = COLORS.muted
+emptyLabel.TextWrapped = true
+emptyLabel.Text = "Belum ada hasil scan.\nPilih folder lalu tekan SCAN FOLDER."
+emptyLabel.Parent = fileCard
+
+local detailCard = Instance.new("Frame")
+detailCard.Name = "Details"
+detailCard.BackgroundColor3 = COLORS.card
+detailCard.BorderSizePixel = 0
+detailCard.Position = UDim2.new(0.61, 5, 0, 0)
+detailCard.Size = UDim2.new(0.39, -5, 1, 0)
+detailCard.Parent = content
+local detailCorner = Instance.new("UICorner")
+detailCorner.CornerRadius = UDim.new(0, 10)
+detailCorner.Parent = detailCard
+
+local detailHeader = Instance.new("TextLabel")
+detailHeader.BackgroundTransparency = 1
+detailHeader.Position = UDim2.new(0, 14, 0, 12)
+detailHeader.Size = UDim2.new(1, -28, 0, 18)
+detailHeader.Font = Enum.Font.GothamBold
+detailHeader.TextSize = 11
+detailHeader.TextColor3 = COLORS.text
+detailHeader.TextXAlignment = Enum.TextXAlignment.Left
+detailHeader.Text = "SELECTED FILE"
+detailHeader.Parent = detailCard
+
+local detailName = Instance.new("TextLabel")
+detailName.BackgroundTransparency = 1
+detailName.Position = UDim2.new(0, 14, 0, 39)
+detailName.Size = UDim2.new(1, -28, 0, 42)
+detailName.Font = Enum.Font.GothamBold
+detailName.TextSize = 13
+detailName.TextColor3 = COLORS.text
+detailName.TextWrapped = true
+detailName.TextTruncate = Enum.TextTruncate.AtEnd
+detailName.TextXAlignment = Enum.TextXAlignment.Left
+detailName.TextYAlignment = Enum.TextYAlignment.Top
+detailName.Text = "Belum ada file dipilih"
+detailName.Parent = detailCard
+
+local detailBadge = Instance.new("TextLabel")
+detailBadge.BackgroundColor3 = COLORS.input
+detailBadge.BorderSizePixel = 0
+detailBadge.Position = UDim2.new(0, 14, 0, 88)
+detailBadge.Size = UDim2.new(0, 92, 0, 23)
+detailBadge.Font = Enum.Font.GothamBold
+detailBadge.TextSize = 10
+detailBadge.TextColor3 = COLORS.muted
+detailBadge.Text = "WAITING"
+detailBadge.Parent = detailCard
+local detailBadgeCorner = Instance.new("UICorner")
+detailBadgeCorner.CornerRadius = UDim.new(0, 6)
+detailBadgeCorner.Parent = detailBadge
+
+local detailInfo = Instance.new("TextLabel")
+detailInfo.BackgroundTransparency = 1
+detailInfo.Position = UDim2.new(0, 14, 0, 124)
+detailInfo.Size = UDim2.new(1, -28, 0, 86)
+detailInfo.Font = Enum.Font.Code
+detailInfo.TextSize = 10
+detailInfo.TextColor3 = COLORS.muted
+detailInfo.TextWrapped = true
+detailInfo.TextXAlignment = Enum.TextXAlignment.Left
+detailInfo.TextYAlignment = Enum.TextYAlignment.Top
+detailInfo.Text = "Pilih file untuk melihat detail."
+detailInfo.Parent = detailCard
+
+local detailError = Instance.new("TextLabel")
+detailError.BackgroundTransparency = 1
+detailError.Position = UDim2.new(0, 14, 0, 216)
+detailError.Size = UDim2.new(1, -28, 0, 60)
+detailError.Font = Enum.Font.Gotham
+detailError.TextSize = 10
+detailError.TextColor3 = COLORS.red
+detailError.TextWrapped = true
+detailError.TextXAlignment = Enum.TextXAlignment.Left
+detailError.TextYAlignment = Enum.TextYAlignment.Top
+detailError.Text = ""
+detailError.Parent = detailCard
+
+local importSelectedButton = Instance.new("TextButton")
+importSelectedButton.Name = "ImportSelected"
+importSelectedButton.Position = UDim2.new(0, 18, 1, -68)
+importSelectedButton.Size = UDim2.new(0, 168, 0, 34)
+importSelectedButton.BackgroundColor3 = COLORS.accent
+importSelectedButton.BorderSizePixel = 0
+importSelectedButton.Font = Enum.Font.GothamBold
+importSelectedButton.TextSize = 11
+importSelectedButton.TextColor3 = COLORS.text
+importSelectedButton.Text = "IMPORT SELECTED"
+importSelectedButton.AutoButtonColor = false
+importSelectedButton.Parent = panel
+local importSelectedCorner = Instance.new("UICorner")
+importSelectedCorner.CornerRadius = UDim.new(0, 8)
+importSelectedCorner.Parent = importSelectedButton
+
+local importAllButton = Instance.new("TextButton")
+importAllButton.Name = "ImportAll"
+importAllButton.Position = UDim2.new(0, 194, 1, -68)
+importAllButton.Size = UDim2.new(0, 168, 0, 34)
+importAllButton.BackgroundColor3 = COLORS.cardAlt
+importAllButton.BorderSizePixel = 0
+importAllButton.Font = Enum.Font.GothamBold
+importAllButton.TextSize = 11
+importAllButton.TextColor3 = COLORS.text
+importAllButton.Text = "IMPORT ALL VALID"
+importAllButton.AutoButtonColor = false
+importAllButton.Parent = panel
+local importAllCorner = Instance.new("UICorner")
+importAllCorner.CornerRadius = UDim.new(0, 8)
+importAllCorner.Parent = importAllButton
 
 local statusLabel = Instance.new("TextLabel")
 statusLabel.Name = "Status"
 statusLabel.BackgroundTransparency = 1
-statusLabel.Position = UDim2.new(0, 14, 0, 137)
-statusLabel.Size = UDim2.new(1, -28, 0, 40)
+statusLabel.Position = UDim2.new(0, 18, 1, -31)
+statusLabel.Size = UDim2.new(1, -36, 0, 18)
 statusLabel.Font = Enum.Font.Gotham
-statusLabel.TextSize = 12
-statusLabel.TextColor3 = Color3.fromRGB(195, 195, 205)
-statusLabel.TextWrapped = true
+statusLabel.TextSize = 10
+statusLabel.TextColor3 = COLORS.muted
 statusLabel.TextXAlignment = Enum.TextXAlignment.Left
-statusLabel.TextYAlignment = Enum.TextYAlignment.Top
-statusLabel.Text = "Siap. Executor harus menyediakan readfile(path)."
+statusLabel.TextTruncate = Enum.TextTruncate.AtEnd
+statusLabel.Text = "Ready. Masukkan folder lalu scan."
 statusLabel.Parent = panel
 
--- Drag panel tanpa library luar.
+local function addHover(button, normalColor, hoverColor)
+    button.MouseEnter:Connect(function()
+        if button.Active then
+            TweenService:Create(button, TweenInfo.new(0.12), {BackgroundColor3 = hoverColor}):Play()
+        end
+    end)
+    button.MouseLeave:Connect(function()
+        if button.Active then
+            TweenService:Create(button, TweenInfo.new(0.12), {BackgroundColor3 = normalColor}):Play()
+        end
+    end)
+end
+
+addHover(scanButton, COLORS.accent, COLORS.accentHover)
+addHover(importSelectedButton, COLORS.accent, COLORS.accentHover)
+addHover(importAllButton, COLORS.cardAlt, COLORS.input)
+addHover(closeButton, COLORS.cardAlt, Color3.fromRGB(72, 47, 65))
+
+closeButton.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
+
+local function setStatus(text, color)
+    statusLabel.Text = tostring(text)
+    statusLabel.TextColor3 = color or COLORS.muted
+    statusDot.TextColor3 = color or COLORS.green
+end
+
+-- Drag panel dari top bar.
 do
     local dragging = false
     local dragStart
     local startPosition
 
-    local function update(input)
-        local delta = input.Position - dragStart
-        panel.Position = UDim2.new(
-            startPosition.X.Scale,
-            startPosition.X.Offset + delta.X,
-            startPosition.Y.Scale,
-            startPosition.Y.Offset + delta.Y
-        )
-    end
-
-    title.InputBegan:Connect(function(input)
+    topBar.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1
             or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             dragStart = input.Position
             startPosition = panel.Position
-
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragging = false
@@ -156,26 +497,188 @@ do
         end
     end)
 
-    title.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement
-            or input.UserInputType == Enum.UserInputType.Touch then
-            UserInputService.InputChanged:Connect(function(changedInput)
-                if dragging and changedInput == input then
-                    update(changedInput)
-                end
-            end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - dragStart
+            panel.Position = UDim2.new(
+                startPosition.X.Scale,
+                startPosition.X.Offset + delta.X,
+                startPosition.Y.Scale,
+                startPosition.Y.Offset + delta.Y
+            )
         end
     end)
 end
 
-local function setStatus(text, color)
-    statusLabel.Text = tostring(text)
-    statusLabel.TextColor3 = color or Color3.fromRGB(195, 195, 205)
+local recursive = false
+recursiveButton.MouseButton1Click:Connect(function()
+    recursive = not recursive
+    recursiveButton.Text = recursive and "↳  Subfolder: ON" or "↳  Subfolder: OFF"
+    recursiveButton.TextColor3 = recursive and COLORS.cyan or COLORS.muted
+end)
+
+local fileEntries = {}
+local selectedEntry = nil
+local scanning = false
+local importing = false
+local rowObjects = {}
+
+local function updateSummary()
+    local valid = 0
+    local rejected = 0
+    for _, entry in ipairs(fileEntries) do
+        if entry.valid then
+            valid = valid + 1
+        else
+            rejected = rejected + 1
+        end
+    end
+    totalValue.Text = tostring(#fileEntries)
+    validValue.Text = tostring(valid)
+    rejectedValue.Text = tostring(rejected)
 end
 
-local function fail(message)
-    error(tostring(message), 0)
+local function clearRows()
+    for _, object in ipairs(rowObjects) do
+        if object ~= nil then
+            object:Destroy()
+        end
+    end
+    rowObjects = {}
 end
+
+local function updateDetails()
+    if selectedEntry == nil then
+        detailName.Text = "Belum ada file dipilih"
+        detailBadge.Text = "WAITING"
+        detailBadge.TextColor3 = COLORS.muted
+        detailBadge.BackgroundColor3 = COLORS.input
+        detailInfo.Text = "Pilih file untuk melihat detail."
+        detailError.Text = ""
+        return
+    end
+
+    detailName.Text = selectedEntry.name
+    if selectedEntry.valid then
+        detailBadge.Text = "✓  VERIFIED"
+        detailBadge.TextColor3 = COLORS.green
+        detailBadge.BackgroundColor3 = Color3.fromRGB(28, 74, 62)
+    else
+        detailBadge.Text = "×  REJECTED"
+        detailBadge.TextColor3 = COLORS.red
+        detailBadge.BackgroundColor3 = Color3.fromRGB(80, 37, 53)
+    end
+
+    detailInfo.Text = string.format(
+        "Path\n%s\n\nSize     %s\nInstances %s\nClasses   %s\nRoots     %s",
+        selectedEntry.path,
+        tostring(selectedEntry.sizeText or "-"),
+        tostring(selectedEntry.instanceCount or "-"),
+        tostring(selectedEntry.classCount or "-"),
+        tostring(selectedEntry.rootCount or "-")
+    )
+    detailError.Text = selectedEntry.valid and "File lolos preflight scan. Siap di-import." or (selectedEntry.error or "File ditolak.")
+    detailError.TextColor3 = selectedEntry.valid and COLORS.green or COLORS.red
+end
+
+local function formatBytes(size)
+    if size == nil then
+        return "-"
+    elseif size >= 1048576 then
+        return string.format("%.2f MB", size / 1048576)
+    elseif size >= 1024 then
+        return string.format("%.1f KB", size / 1024)
+    end
+    return tostring(size) .. " B"
+end
+
+local function renderRows()
+    clearRows()
+    local query = string.lower(searchBox.Text or "")
+    local shown = 0
+
+    for _, entry in ipairs(fileEntries) do
+        local lowerName = string.lower(entry.name)
+        if query == "" or string.find(lowerName, query, 1, true) ~= nil then
+            shown = shown + 1
+            local row = Instance.new("Frame")
+            row.Name = "FileRow"
+            row.LayoutOrder = shown
+            row.Size = UDim2.new(1, -6, 0, 52)
+            row.BackgroundColor3 = (entry == selectedEntry) and Color3.fromRGB(48, 47, 83) or COLORS.cardAlt
+            row.BorderSizePixel = 0
+            row.Parent = fileList
+            local rowCorner = Instance.new("UICorner")
+            rowCorner.CornerRadius = UDim.new(0, 8)
+            rowCorner.Parent = row
+
+            local status = Instance.new("TextLabel")
+            status.BackgroundTransparency = 1
+            status.Position = UDim2.new(0, 9, 0, 7)
+            status.Size = UDim2.new(0, 18, 0, 20)
+            status.Font = Enum.Font.GothamBold
+            status.TextSize = 16
+            status.TextColor3 = entry.valid and COLORS.green or COLORS.red
+            status.Text = entry.valid and "✓" or "×"
+            status.Parent = row
+
+            local nameLabel = Instance.new("TextLabel")
+            nameLabel.BackgroundTransparency = 1
+            nameLabel.Position = UDim2.new(0, 33, 0, 6)
+            nameLabel.Size = UDim2.new(1, -122, 0, 20)
+            nameLabel.Font = Enum.Font.GothamBold
+            nameLabel.TextSize = 11
+            nameLabel.TextColor3 = COLORS.text
+            nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+            nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+            nameLabel.Text = entry.name
+            nameLabel.Parent = row
+
+            local metaLabel = Instance.new("TextLabel")
+            metaLabel.BackgroundTransparency = 1
+            metaLabel.Position = UDim2.new(0, 33, 0, 27)
+            metaLabel.Size = UDim2.new(1, -42, 0, 15)
+            metaLabel.Font = Enum.Font.Code
+            metaLabel.TextSize = 9
+            metaLabel.TextColor3 = COLORS.muted
+            metaLabel.TextXAlignment = Enum.TextXAlignment.Left
+            metaLabel.TextTruncate = Enum.TextTruncate.AtEnd
+            metaLabel.Text = entry.valid
+                and string.format("%s  •  %s instances", entry.sizeText or "-", tostring(entry.instanceCount or "?"))
+                or (entry.error or "ditolak")
+            metaLabel.Parent = row
+
+            local selectButton = Instance.new("TextButton")
+            selectButton.BackgroundTransparency = 1
+            selectButton.BorderSizePixel = 0
+            selectButton.Size = UDim2.new(1, 0, 1, 0)
+            selectButton.Text = ""
+            selectButton.AutoButtonColor = false
+            selectButton.Parent = row
+            selectButton.MouseButton1Click:Connect(function()
+                selectedEntry = entry
+                updateDetails()
+                renderRows()
+            end)
+            rowObjects[#rowObjects + 1] = row
+        end
+    end
+
+    emptyLabel.Visible = shown == 0
+    if shown == 0 and #fileEntries > 0 then
+        emptyLabel.Text = "Tidak ada file yang cocok dengan pencarian."
+    elseif #fileEntries == 0 then
+        emptyLabel.Text = "Belum ada hasil scan.\nPilih folder lalu tekan SCAN FOLDER."
+    end
+    fileList.CanvasSize = UDim2.new(0, 0, 0, fileLayout.AbsoluteContentSize.Y + 8)
+    updateSummary()
+end
+
+searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+    renderRows()
+end)
+
 
 local function byteAt(data, position)
     local value = string.byte(data, position)
@@ -936,6 +1439,8 @@ local function decodeRbxm(data)
         nodesByRef = {},
         parentByRef = {},
         propertyRecords = {},
+        sawParentChunk = false,
+        sawEndChunk = false,
     }
 
     while reader:remaining() > 0 do
@@ -1032,13 +1537,25 @@ local function decodeRbxm(data)
             end
 
         elseif chunkName == "PRNT" then
+            file.sawParentChunk = true
             local chunkReader = Reader.new(chunkData)
             chunkReader:u8() -- version
             local count = chunkReader:u32le()
             local children = chunkReader:referents(count)
             local parents = chunkReader:referents(count)
             for i = 1, count do
-                file.parentByRef[children[i]] = parents[i]
+                local child = children[i]
+                local parent = parents[i]
+                if file.nodesByRef[child] == nil then
+                    fail("PRNT merujuk child yang tidak ada: " .. tostring(child))
+                end
+                if parent ~= -1 and file.nodesByRef[parent] == nil then
+                    fail("PRNT merujuk parent yang tidak ada: " .. tostring(parent))
+                end
+                if file.parentByRef[child] ~= nil then
+                    fail("PRNT memiliki child duplikat: " .. tostring(child))
+                end
+                file.parentByRef[child] = parent
             end
 
         elseif chunkName == "SIGN" then
@@ -1048,11 +1565,50 @@ local function decodeRbxm(data)
             if chunkData ~= "</roblox>" then
                 fail("END chunk RBXM tidak valid")
             end
+            file.sawEndChunk = true
             break
 
         else
             fail("Chunk RBXM tidak dikenal: " .. tostring(chunkName))
         end
+    end
+
+    if not file.sawEndChunk then
+        fail("RBXM tidak memiliki END chunk")
+    end
+    if not file.sawParentChunk then
+        fail("RBXM tidak memiliki PRNT chunk")
+    end
+
+    local actualInstanceCount = 0
+    for _, group in ipairs(file.groups) do
+        actualInstanceCount = actualInstanceCount + group.count
+    end
+    if actualInstanceCount ~= file.instanceCount then
+        fail(string.format(
+            "Jumlah instance tidak cocok: header %d, terbaca %d",
+            file.instanceCount,
+            actualInstanceCount
+        ))
+    end
+    if #file.groups ~= file.classCount then
+        fail(string.format(
+            "Jumlah class tidak cocok: header %d, terbaca %d",
+            file.classCount,
+            #file.groups
+        ))
+    end
+
+    local parentEntryCount = 0
+    for _ in pairs(file.parentByRef) do
+        parentEntryCount = parentEntryCount + 1
+    end
+    if parentEntryCount ~= actualInstanceCount then
+        fail(string.format(
+            "PRNT tidak lengkap: header %d, terbaca %d",
+            actualInstanceCount,
+            parentEntryCount
+        ))
     end
 
     local roots = {}
@@ -1297,54 +1853,363 @@ local function importDecodedFile(file)
     return createdCount, failedProperties, failedClassCount
 end
 
-local importing = false
 
-local function importPath(path)
-    if path == nil or path:gsub("%s+", "") == "" then
-        fail("Masukkan path file .rbxm terlebih dahulu")
+local function normalizePath(path)
+    path = tostring(path or "")
+    path = path:gsub("\\", "/")
+    path = path:gsub("/+", "/")
+    if #path > 1 then
+        path = path:gsub("/$", "")
     end
-
-    setStatus("Membaca file...", Color3.fromRGB(220, 220, 150))
-    local data = readLocalFile(path)
-    setStatus("Menganalisis RBXM...", Color3.fromRGB(220, 220, 150))
-    local file = decodeRbxm(data)
-    setStatus("Membuat instance...", Color3.fromRGB(220, 220, 150))
-    local created, failedProperties, failedClasses = importDecodedFile(file)
-
-    local message = string.format(
-        "Selesai: %d instance dibuat, %d property dilewati.",
-        created,
-        failedProperties
-    )
-    if failedClasses > 0 then
-        message = message .. " " .. tostring(failedClasses) .. " class dibuat sebagai Folder pengganti."
-    end
-    if DISABLE_IMPORTED_SCRIPTS then
-        message = message .. " Script di-disable."
-    end
-    setStatus(message, Color3.fromRGB(130, 230, 160))
+    return path
 end
 
-importButton.MouseButton1Click:Connect(function()
-    if importing then
+local function fileNameFromPath(path)
+    local name = tostring(path):match("([^/]+)$")
+    return name or tostring(path)
+end
+
+local function isRbxmPath(path)
+    return string.lower(tostring(path)):sub(-5) == ".rbxm"
+end
+
+local function cleanError(errorText)
+    local text = tostring(errorText or "error")
+    text = text:gsub("^.-:%d+: ", "")
+    if #text > 210 then
+        text = string.sub(text, 1, 207) .. "..."
+    end
+    return text
+end
+
+local function getExecutorFunction(name)
+    local environment = getEnvironment()
+    local value = environment[name]
+    if type(value) == "function" then
+        return value
+    end
+    local globalValue = _G[name]
+    if type(globalValue) == "function" then
+        return globalValue
+    end
+    return nil
+end
+
+local function listDirectory(folder)
+    local listFunction = getExecutorFunction("listfiles")
+    if listFunction == nil then
+        fail("Executor ini tidak menyediakan listfiles(folder)")
+    end
+    local ok, result = pcall(listFunction, folder)
+    if not ok then
+        fail("listfiles gagal: " .. tostring(result))
+    end
+    if type(result) ~= "table" then
+        fail("listfiles tidak mengembalikan daftar file")
+    end
+    return result
+end
+
+local function pathIsFolder(path)
+    local folderFunction = getExecutorFunction("isfolder")
+    if folderFunction ~= nil then
+        local ok, result = pcall(folderFunction, path)
+        if ok then
+            return result == true
+        end
+    end
+    return tostring(path):sub(-1) == "/"
+end
+
+local function collectRbxmPaths(folder, recursive)
+    local paths = {}
+    local pathSeen = {}
+    local folderSeen = {}
+    local scanErrors = {}
+
+    local function visit(current, depth)
+        current = normalizePath(current)
+        if depth > MAX_SCAN_DEPTH or folderSeen[current] then
+            return
+        end
+        folderSeen[current] = true
+
+        local ok, result = pcall(listDirectory, current)
+        if not ok then
+            scanErrors[#scanErrors + 1] = fileNameFromPath(current) .. ": " .. cleanError(result)
+            return
+        end
+
+        for _, item in ipairs(result) do
+            local path = normalizePath(item)
+            if pathIsFolder(path) then
+                if recursive then
+                    visit(path, depth + 1)
+                end
+            elseif isRbxmPath(path) then
+                local key = string.lower(path)
+                if not pathSeen[key] then
+                    pathSeen[key] = true
+                    paths[#paths + 1] = path
+                    if #paths >= MAX_FILES then
+                        return
+                    end
+                end
+            end
+        end
+    end
+
+    visit(folder, 0)
+    table.sort(paths, function(a, b)
+        return string.lower(fileNameFromPath(a)) < string.lower(fileNameFromPath(b))
+    end)
+    return paths, scanErrors
+end
+
+local function validateDecodedFile(file)
+    if file == nil then
+        fail("Parser mengembalikan data kosong")
+    end
+    if file.instanceCount == nil or file.instanceCount < 1 then
+        fail("RBXM tidak berisi instance")
+    end
+    if file.roots == nil or #file.roots < 1 then
+        fail("RBXM tidak memiliki root instance")
+    end
+    if not file.sawEndChunk or not file.sawParentChunk then
+        fail("Struktur RBXM tidak lengkap")
+    end
+end
+
+local function makeEntry(path)
+    local entry = {
+        path = path,
+        name = fileNameFromPath(path),
+        valid = false,
+        error = "Belum diverifikasi",
+        size = 0,
+        sizeText = "-",
+        instanceCount = nil,
+        classCount = nil,
+        rootCount = nil,
+    }
+
+    local okData, data = pcall(readLocalFile, path)
+    if not okData then
+        entry.error = cleanError(data)
+        return entry
+    end
+    entry.size = #data
+    entry.sizeText = formatBytes(#data)
+
+    local okDecoded, file = pcall(decodeRbxm, data)
+    if not okDecoded then
+        entry.error = cleanError(file)
+        return entry
+    end
+
+    local okValid, validationError = pcall(validateDecodedFile, file)
+    if not okValid then
+        entry.error = cleanError(validationError)
+        return entry
+    end
+
+    entry.valid = true
+    entry.error = ""
+    entry.instanceCount = file.instanceCount
+    entry.classCount = #file.groups
+    entry.rootCount = #file.roots
+    return entry
+end
+
+local function scanFolder()
+    if scanning or importing then
         return
     end
-    importing = true
-    importButton.Active = false
-    importButton.AutoButtonColor = false
+
+    local folder = normalizePath(folderBox.Text)
+    if folder == "" then
+        setStatus("Masukkan folder tujuan terlebih dahulu.", COLORS.red)
+        return
+    end
+
+    scanning = true
+    selectedEntry = nil
+    fileEntries = {}
+    updateDetails()
+    renderRows()
+    scanButton.Active = false
+    scanButton.Text = "SCANNING..."
+    scanButton.BackgroundColor3 = COLORS.input
+    setStatus("Mencari file .rbxm...", COLORS.yellow)
 
     task.spawn(function()
-        local ok, err = pcall(function()
-            importPath(pathBox.Text)
-        end)
+        local ok, pathsOrError, errors = pcall(collectRbxmPaths, folder, recursive)
         if not ok then
-            setStatus("ERROR ASLI: " .. tostring(err), Color3.fromRGB(255, 125, 125))
+            setStatus("ERROR ASLI: " .. cleanError(pathsOrError), COLORS.red)
+            scanButton.Active = true
+            scanButton.Text = "SCAN FOLDER"
+            scanButton.BackgroundColor3 = COLORS.accent
+            scanning = false
+            return
         end
-        importButton.Active = true
-        importButton.AutoButtonColor = true
+
+        local paths = pathsOrError
+        if #paths == 0 then
+            local message = "Tidak ditemukan file .rbxm di folder itu."
+            if errors ~= nil and #errors > 0 then
+                message = message .. " " .. cleanError(errors[1])
+            end
+            setStatus(message, COLORS.yellow)
+        else
+            setStatus("Preflight verify 0/" .. tostring(#paths) .. "...", COLORS.yellow)
+        end
+
+        for index, path in ipairs(paths) do
+            local entry = makeEntry(path)
+            fileEntries[#fileEntries + 1] = entry
+            if index % 2 == 0 or index == #paths then
+                renderRows()
+                setStatus(
+                    string.format("Preflight verify %d/%d...", index, #paths),
+                    COLORS.yellow
+                )
+                task.wait()
+            end
+        end
+
+        renderRows()
+        scanButton.Active = true
+        scanButton.Text = "SCAN FOLDER"
+        scanButton.BackgroundColor3 = COLORS.accent
+        scanning = false
+
+        local valid = 0
+        for _, entry in ipairs(fileEntries) do
+            if entry.valid then
+                valid = valid + 1
+            end
+        end
+        if #paths > 0 then
+            setStatus(
+                string.format("Scan selesai: %d valid, %d ditolak.", valid, #paths - valid),
+                valid > 0 and COLORS.green or COLORS.red
+            )
+        end
+    end)
+end
+
+local function entryStillValid(entry)
+    local data = readLocalFile(entry.path)
+    local file = decodeRbxm(data)
+    validateDecodedFile(file)
+    return file
+end
+
+local function markEntryRejected(entry, message)
+    entry.valid = false
+    entry.error = cleanError(message)
+    if selectedEntry == entry then
+        updateDetails()
+    end
+    renderRows()
+end
+
+local function importOneEntry(entry, index, total)
+    if not entry.valid then
+        return false, "File sudah ditolak preflight"
+    end
+
+    setStatus(
+        total and string.format("Verifikasi ulang %d/%d: %s", index, total, entry.name)
+            or "Verifikasi ulang: " .. entry.name,
+        COLORS.yellow
+    )
+
+    local ok, result = pcall(function()
+        local file = entryStillValid(entry)
+        local created, failedProperties, failedClasses = importDecodedFile(file)
+        return created, failedProperties, failedClasses
+    end)
+    if not ok then
+        markEntryRejected(entry, result)
+        return false, cleanError(result)
+    end
+
+    entry.imported = true
+    return true, result
+end
+
+scanButton.MouseButton1Click:Connect(scanFolder)
+
+importSelectedButton.MouseButton1Click:Connect(function()
+    if scanning or importing then
+        return
+    end
+    if selectedEntry == nil then
+        setStatus("Pilih satu file yang sudah VERIFIED.", COLORS.yellow)
+        return
+    end
+    if not selectedEntry.valid then
+        setStatus("File REJECTED tidak akan di-import.", COLORS.red)
+        return
+    end
+
+    importing = true
+    importSelectedButton.Active = false
+    importAllButton.Active = false
+    local ok, message = importOneEntry(selectedEntry)
+    if ok then
+        setStatus("Import selesai: " .. selectedEntry.name, COLORS.green)
+    else
+        setStatus("Import ditolak: " .. tostring(message), COLORS.red)
+    end
+    importSelectedButton.Active = true
+    importAllButton.Active = true
+    importing = false
+end)
+
+importAllButton.MouseButton1Click:Connect(function()
+    if scanning or importing then
+        return
+    end
+
+    local validEntries = {}
+    for _, entry in ipairs(fileEntries) do
+        if entry.valid then
+            validEntries[#validEntries + 1] = entry
+        end
+    end
+    if #validEntries == 0 then
+        setStatus("Tidak ada file VERIFIED untuk di-import.", COLORS.yellow)
+        return
+    end
+
+    importing = true
+    importSelectedButton.Active = false
+    importAllButton.Active = false
+    local success = 0
+    local failed = 0
+
+    task.spawn(function()
+        for index, entry in ipairs(validEntries) do
+            local ok = importOneEntry(entry, index, #validEntries)
+            if ok then
+                success = success + 1
+            else
+                failed = failed + 1
+            end
+            task.wait()
+        end
+        renderRows()
+        setStatus(
+            string.format("Import batch selesai: %d berhasil, %d ditolak.", success, failed),
+            failed == 0 and COLORS.green or COLORS.yellow
+        )
+        importSelectedButton.Active = true
+        importAllButton.Active = true
         importing = false
     end)
 end)
 
--- Satu status startup ditampilkan di panel, tanpa spam Output.
-setStatus("Siap. Masukkan path .rbxm lalu tekan Import RBXM.")
+setStatus("Ready. Masukkan folder lalu tekan SCAN FOLDER.", COLORS.green)
