@@ -1,1412 +1,1350 @@
---  oo_       .-.    W  W  wWw    wWw wWw \\\  /// 
--- /  _)-<  c(O_O)c (O)(O) (O)    (O) (O)_((O)(O)) 
--- \__ `.  ,'.---.`,  ||   ( \    / ) / __)| \ ||  
---    `. |/ /|_|_|\ \ | \   \ \  / / / (   ||\\||  
---    _| || \_____/ | |  `. /  \/  \(  _)  || \ |  
--- ,-'   |'. `---' .`(.-.__)\ `--' / \ \_  ||  ||  
---(_..--'   `-...-'   `-'    `-..-'   \__)(_/  \_) 
---         Powered by solven studio 2026
- 
- 
-if not plugin then
+--[[
+    RBXM Importer - Studio Lite / executor LocalScript
+    Versi bersih, tidak di-obfuscate.
+
+    Cara pakai:
+    1. Pastikan executor menyediakan readfile(path).
+    2. Masukkan path file .rbxm pada kotak input.
+    3. Tekan Import RBXM.
+
+    Catatan:
+    - Parser ini membaca RBXM binary normal dan chunk LZ4.
+    - Zstandard hanya bisa dipakai bila executor menyediakan fungsi decompressor.
+    - Objek hasil dibuat langsung di Workspace, tanpa wrapper tambahan.
+    - Script di dalam model dibuat Disabled secara default agar file tidak langsung
+      menjalankan kode asing. Ubah DISABLE_IMPORTED_SCRIPTS menjadi false jika perlu.
+]]
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+if LocalPlayer == nil then
     return
 end
- 
-local Selection = game:GetService("Selection")
-local GeometryService = game:GetService("GeometryService")
-local AssetService = game:GetService("AssetService")
-local ChangeHistoryService = game:GetService("ChangeHistoryService")
-local CollectionService = game:GetService("CollectionService")
-local StudioService = game:GetService("StudioService")
-local SerializationService = game:GetService("SerializationService")
-local EncodingService = game:GetService("EncodingService")
- 
-local PLUGIN_ID = "SOLVEN_UnionToMesh_V1"
-local BUILD = "2026-08-31 SolidMesh Parser V1.0 FULL"
-local MAX_ANALYZE = 120
- 
-local function safeGetSetting(key, fallback)
-    local ok, value = pcall(function()
-        return plugin:GetSetting(PLUGIN_ID .. "_" .. key)
+
+local DISABLE_IMPORTED_SCRIPTS = true
+local GUI_NAME = "RBXMImporter_StudioLite"
+local ORIGINAL_CLASS_ATTRIBUTE = "RBXMOriginalClass"
+
+local playerGui = LocalPlayer:WaitForChild("PlayerGui")
+local oldGui = playerGui:FindFirstChild(GUI_NAME)
+if oldGui ~= nil then
+    oldGui:Destroy()
+end
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = GUI_NAME
+screenGui.ResetOnSpawn = false
+screenGui.DisplayOrder = 100
+screenGui.IgnoreGuiInset = true
+screenGui.Parent = playerGui
+
+local panel = Instance.new("Frame")
+panel.Name = "Panel"
+panel.Size = UDim2.new(0, 360, 0, 190)
+panel.Position = UDim2.new(0.5, -180, 0.5, -95)
+panel.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
+panel.BorderSizePixel = 0
+panel.Active = true
+panel.Parent = screenGui
+
+local panelCorner = Instance.new("UICorner")
+panelCorner.CornerRadius = UDim.new(0, 12)
+panelCorner.Parent = panel
+
+local panelStroke = Instance.new("UIStroke")
+panelStroke.Color = Color3.fromRGB(90, 90, 110)
+panelStroke.Transparency = 0.35
+panelStroke.Parent = panel
+
+local title = Instance.new("TextLabel")
+title.Name = "Title"
+title.BackgroundTransparency = 1
+title.Position = UDim2.new(0, 14, 0, 8)
+title.Size = UDim2.new(1, -28, 0, 26)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 16
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Text = "RBXM Importer"
+title.Parent = panel
+
+local pathBox = Instance.new("TextBox")
+pathBox.Name = "Path"
+pathBox.Position = UDim2.new(0, 14, 0, 45)
+pathBox.Size = UDim2.new(1, -28, 0, 38)
+pathBox.BackgroundColor3 = Color3.fromRGB(43, 43, 52)
+pathBox.BorderSizePixel = 0
+pathBox.ClearTextOnFocus = false
+pathBox.Font = Enum.Font.Code
+pathBox.TextSize = 13
+pathBox.TextColor3 = Color3.fromRGB(240, 240, 245)
+pathBox.PlaceholderColor3 = Color3.fromRGB(145, 145, 155)
+pathBox.PlaceholderText = "path file .rbxm, contoh: model.rbxm"
+pathBox.Text = "model.rbxm"
+pathBox.TextXAlignment = Enum.TextXAlignment.Left
+pathBox.Parent = panel
+
+local pathPadding = Instance.new("UIPadding")
+pathPadding.PaddingLeft = UDim.new(0, 10)
+pathPadding.PaddingRight = UDim.new(0, 10)
+pathPadding.Parent = pathBox
+
+local pathCorner = Instance.new("UICorner")
+pathCorner.CornerRadius = UDim.new(0, 7)
+pathCorner.Parent = pathBox
+
+local importButton = Instance.new("TextButton")
+importButton.Name = "Import"
+importButton.Position = UDim2.new(0, 14, 0, 91)
+importButton.Size = UDim2.new(0, 150, 0, 36)
+importButton.BackgroundColor3 = Color3.fromRGB(55, 125, 220)
+importButton.BorderSizePixel = 0
+importButton.Font = Enum.Font.GothamBold
+importButton.TextSize = 13
+importButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+importButton.Text = "Import RBXM"
+importButton.AutoButtonColor = true
+importButton.Parent = panel
+
+local importCorner = Instance.new("UICorner")
+importCorner.CornerRadius = UDim.new(0, 7)
+importCorner.Parent = importButton
+
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Name = "Status"
+statusLabel.BackgroundTransparency = 1
+statusLabel.Position = UDim2.new(0, 14, 0, 137)
+statusLabel.Size = UDim2.new(1, -28, 0, 40)
+statusLabel.Font = Enum.Font.Gotham
+statusLabel.TextSize = 12
+statusLabel.TextColor3 = Color3.fromRGB(195, 195, 205)
+statusLabel.TextWrapped = true
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+statusLabel.TextYAlignment = Enum.TextYAlignment.Top
+statusLabel.Text = "Siap. Executor harus menyediakan readfile(path)."
+statusLabel.Parent = panel
+
+-- Drag panel tanpa library luar.
+do
+    local dragging = false
+    local dragStart
+    local startPosition
+
+    local function update(input)
+        local delta = input.Position - dragStart
+        panel.Position = UDim2.new(
+            startPosition.X.Scale,
+            startPosition.X.Offset + delta.X,
+            startPosition.Y.Scale,
+            startPosition.Y.Offset + delta.Y
+        )
+    end
+
+    title.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPosition = panel.Position
+
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
     end)
-    if ok and value ~= nil then
+
+    title.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch then
+            UserInputService.InputChanged:Connect(function(changedInput)
+                if dragging and changedInput == input then
+                    update(changedInput)
+                end
+            end)
+        end
+    end)
+end
+
+local function setStatus(text, color)
+    statusLabel.Text = tostring(text)
+    statusLabel.TextColor3 = color or Color3.fromRGB(195, 195, 205)
+end
+
+local function fail(message)
+    error(tostring(message), 0)
+end
+
+local function byteAt(data, position)
+    local value = string.byte(data, position)
+    if value == nil then
+        fail("Data RBXM berakhir terlalu cepat pada byte " .. tostring(position))
+    end
+    return value
+end
+
+local function bytesToString(bytes)
+    local pieces = {}
+    local pieceIndex = 1
+    local length = #bytes
+    local first = 1
+
+    while first <= length do
+        local last = math.min(first + 2047, length)
+        local chars = {}
+        local n = 1
+        for i = first, last do
+            chars[n] = string.char(bytes[i])
+            n = n + 1
+        end
+        pieces[pieceIndex] = table.concat(chars)
+        pieceIndex = pieceIndex + 1
+        first = last + 1
+    end
+
+    return table.concat(pieces)
+end
+
+local function lz4Decompress(compressed, expectedLength)
+    local inputPosition = 1
+    local inputLength = #compressed
+    local output = {}
+
+    local function readInputByte()
+        if inputPosition > inputLength then
+            fail("Chunk LZ4 terpotong")
+        end
+        local value = string.byte(compressed, inputPosition)
+        inputPosition = inputPosition + 1
         return value
     end
-    return fallback
-end
- 
-local function safeSetSetting(key, value)
-    pcall(function()
-        plugin:SetSetting(PLUGIN_ID .. "_" .. key, value)
-    end)
-end
- 
-local settings = {
-scanDescendants = safeGetSetting("ScanDescendants", true),
-replaceOriginal = safeGetSetting("ReplaceOriginal", true),
-preserveChildren = safeGetSetting("PreserveChildren", true),
-}
- 
-local toolbar = plugin:CreateToolbar("UNION > MESH SOLVEN")
-local toolbarButton = toolbar:CreateButton(
-"UnionToMesh",
-"Convert Union / CSG objects to MeshPart and inspect polygon counts",
-"rbxassetid://90841794914982",
-"Union > Mesh"
-)
-toolbarButton.ClickableWhenViewportHidden = true
- 
-local widgetInfo = DockWidgetPluginGuiInfo.new(
-Enum.InitialDockState.Float,
-false,
-false,
-430,
-600,
-340,
-430
-)
-local widget = plugin:CreateDockWidgetPluginGui(PLUGIN_ID, widgetInfo)
-widget.Title = "SOLVEN Union > Mesh Converter • V1.0"
-widget.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
- 
-local COLORS = {
-bg = Color3.fromRGB(20, 22, 27),
-panel = Color3.fromRGB(28, 31, 38),
-panel2 = Color3.fromRGB(34, 38, 47),
-stroke = Color3.fromRGB(58, 64, 76),
-text = Color3.fromRGB(239, 242, 248),
-muted = Color3.fromRGB(157, 166, 181),
-accent = Color3.fromRGB(255, 145, 44),
-accent2 = Color3.fromRGB(220, 104, 25),
-good = Color3.fromRGB(75, 200, 125),
-medium = Color3.fromRGB(239, 188, 65),
-high = Color3.fromRGB(240, 115, 68),
-bad = Color3.fromRGB(229, 74, 82),
-}
- 
-local function new(className, props, parent)
-    local obj = Instance.new(className)
-    for key, value in pairs(props or {}) do
-        obj[key] = value
+
+    local function readInputUInt16LE()
+        local a = readInputByte()
+        local b = readInputByte()
+        return a + b * 256
     end
-    if parent then
-        obj.Parent = parent
-    end
-    return obj
-end
- 
-local function corner(parent, radius)
-    return new("UICorner", {CornerRadius = UDim.new(0, radius or 8)}, parent)
-end
- 
-local function stroke(parent, color, thickness, transparency)
-    return new("UIStroke", {
-    Color = color or COLORS.stroke,
-    Thickness = thickness or 1,
-    Transparency = transparency or 0,
-    }, parent)
-end
- 
-local root = new("Frame", {
-Name = "Root",
-Size = UDim2.fromScale(1, 1),
-BackgroundColor3 = COLORS.bg,
-BorderSizePixel = 0,
-}, widget)
- 
-new("UIPadding", {
-PaddingTop = UDim.new(0, 14),
-PaddingBottom = UDim.new(0, 14),
-PaddingLeft = UDim.new(0, 14),
-PaddingRight = UDim.new(0, 14),
-}, root)
- 
-local header = new("Frame", {
-Name = "Header",
-Size = UDim2.new(1, 0, 0, 64),
-BackgroundTransparency = 1,
-}, root)
- 
-new("TextLabel", {
-Name = "Title",
-Size = UDim2.new(1, -96, 0, 29),
-Position = UDim2.new(0, 0, 0, 0),
-BackgroundTransparency = 1,
-Font = Enum.Font.GothamBold,
-Text = "UNION  >  MESHPART",
-TextColor3 = COLORS.text,
-TextSize = 18,
-TextXAlignment = Enum.TextXAlignment.Left,
-}, header)
- 
-new("TextLabel", {
-Name = "Subtitle",
-Size = UDim2.new(1, -10, 0, 24),
-Position = UDim2.new(0, 0, 0, 30),
-BackgroundTransparency = 1,
-Font = Enum.Font.Gotham,
-Text = "Persistent converter + exact mesh poly analyzer",
-TextColor3 = COLORS.muted,
-TextSize = 12,
-TextXAlignment = Enum.TextXAlignment.Left,
-}, header)
- 
-local selectionBadge = new("TextLabel", {
-Name = "SelectionBadge",
-AnchorPoint = Vector2.new(1, 0),
-Position = UDim2.new(1, 0, 0, 2),
-Size = UDim2.new(0, 88, 0, 25),
-BackgroundColor3 = COLORS.panel2,
-BorderSizePixel = 0,
-Font = Enum.Font.GothamSemibold,
-Text = "0 selected",
-TextColor3 = COLORS.muted,
-TextSize = 11,
-}, header)
-corner(selectionBadge, 7)
-stroke(selectionBadge, COLORS.stroke, 1, 0.2)
- 
-local summary = new("Frame", {
-Name = "Summary",
-Position = UDim2.new(0, 0, 0, 68),
-Size = UDim2.new(1, 0, 0, 78),
-BackgroundColor3 = COLORS.panel,
-BorderSizePixel = 0,
-}, root)
-corner(summary, 10)
-stroke(summary, COLORS.stroke, 1, 0.25)
- 
-local summaryGrid = new("UIGridLayout", {
-CellPadding = UDim2.new(0, 7, 0, 7),
-CellSize = UDim2.new(0.5, -4, 0, 30),
-FillDirectionMaxCells = 2,
-HorizontalAlignment = Enum.HorizontalAlignment.Center,
-VerticalAlignment = Enum.VerticalAlignment.Center,
-SortOrder = Enum.SortOrder.LayoutOrder,
-}, summary)
-new("UIPadding", {
-PaddingTop = UDim.new(0, 7), PaddingBottom = UDim.new(0, 7),
-PaddingLeft = UDim.new(0, 7), PaddingRight = UDim.new(0, 7),
-}, summary)
- 
-local function makeMetric(name, order)
-    local box = new("Frame", {
-    Name = name,
-    LayoutOrder = order,
-    BackgroundColor3 = COLORS.panel2,
-    BorderSizePixel = 0,
-    }, summary)
-    corner(box, 7)
-    local label = new("TextLabel", {
-    Size = UDim2.fromScale(1, 1),
-    BackgroundTransparency = 1,
-    Font = Enum.Font.GothamSemibold,
-    Text = name .. ": 0",
-    TextColor3 = COLORS.text,
-    TextSize = 11,
-    }, box)
-    return label
-end
- 
-local metricUnions = makeMetric("CSG", 1)
-local metricMeshes = makeMetric("MeshParts", 2)
-local metricTriangles = makeMetric("Triangles", 3)
-local metricVertices = makeMetric("Vertices", 4)
- 
-local optionsFrame = new("Frame", {
-Name = "Options",
-Position = UDim2.new(0, 0, 0, 154),
-Size = UDim2.new(1, 0, 0, 76),
-BackgroundTransparency = 1,
-}, root)
- 
-local function makeToggle(text, xScale, key, settingName)
-    local button = new("TextButton", {
-    Name = key,
-    Position = UDim2.new(xScale, xScale == 0 and 0 or 4, 0, 0),
-    Size = UDim2.new(0.5, -4, 0, 32),
-    BackgroundColor3 = COLORS.panel,
-    BorderSizePixel = 0,
-    AutoButtonColor = false,
-    Text = "",
-    }, optionsFrame)
-    corner(button, 8)
-    stroke(button, COLORS.stroke, 1, 0.25)
- 
-    local box = new("Frame", {
-    Name = "Box",
-    Position = UDim2.new(0, 9, 0.5, -7),
-    Size = UDim2.fromOffset(14, 14),
-    BorderSizePixel = 0,
-    }, button)
-    corner(box, 4)
- 
-    local check = new("TextLabel", {
-    Name = "Check",
-    Size = UDim2.fromScale(1, 1),
-    BackgroundTransparency = 1,
-    Font = Enum.Font.GothamBold,
-    Text = "✓",
-    TextColor3 = Color3.new(1, 1, 1),
-    TextSize = 10,
-    }, box)
- 
-    new("TextLabel", {
-    Position = UDim2.new(0, 31, 0, 0),
-    Size = UDim2.new(1, -36, 1, 0),
-    BackgroundTransparency = 1,
-    Font = Enum.Font.Gotham,
-    Text = text,
-    TextColor3 = COLORS.text,
-    TextSize = 11,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    }, button)
- 
-    local function render()
-        box.BackgroundColor3 = settings[key] and COLORS.accent or COLORS.panel2
-        check.Visible = settings[key]
-    end
- 
-    button.MouseButton1Click:Connect(function()
-        settings[key] = not settings[key]
-        render()
-        safeSetSetting(settingName, settings[key])
-    end)
- 
-    render()
-    return button
-end
- 
-makeToggle("Scan descendants", 0, "scanDescendants", "ScanDescendants")
-makeToggle("Replace originals", 0.5, "replaceOriginal", "ReplaceOriginal")
- 
-local preserveToggle = new("TextButton", {
-Name = "preserveChildren",
-Position = UDim2.new(0, 0, 0, 39),
-Size = UDim2.new(1, 0, 0, 32),
-BackgroundColor3 = COLORS.panel,
-BorderSizePixel = 0,
-AutoButtonColor = false,
-Text = "",
-}, optionsFrame)
-corner(preserveToggle, 8)
-stroke(preserveToggle, COLORS.stroke, 1, 0.25)
-local preserveBox = new("Frame", {
-Position = UDim2.new(0, 9, 0.5, -7),
-Size = UDim2.fromOffset(14, 14),
-BorderSizePixel = 0,
-}, preserveToggle)
-corner(preserveBox, 4)
-local preserveCheck = new("TextLabel", {
-Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1,
-Font = Enum.Font.GothamBold, Text = "✓", TextSize = 10,
-TextColor3 = Color3.new(1, 1, 1),
-}, preserveBox)
-new("TextLabel", {
-Position = UDim2.new(0, 31, 0, 0), Size = UDim2.new(1, -36, 1, 0),
-BackgroundTransparency = 1, Font = Enum.Font.Gotham,
-Text = "Preserve children / attachments / constraints", TextColor3 = COLORS.text,
-TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left,
-}, preserveToggle)
-local function renderPreserve()
-    preserveBox.BackgroundColor3 = settings.preserveChildren and COLORS.accent or COLORS.panel2
-    preserveCheck.Visible = settings.preserveChildren
-end
-preserveToggle.MouseButton1Click:Connect(function()
-    settings.preserveChildren = not settings.preserveChildren
-    renderPreserve()
-    safeSetSetting("PreserveChildren", settings.preserveChildren)
-end)
-renderPreserve()
- 
-local actionFrame = new("Frame", {
-Name = "Actions",
-Position = UDim2.new(0, 0, 0, 239),
-Size = UDim2.new(1, 0, 0, 42),
-BackgroundTransparency = 1,
-}, root)
- 
-local analyzeButton = new("TextButton", {
-Name = "Analyze",
-Size = UDim2.new(0.36, -4, 1, 0),
-BackgroundColor3 = COLORS.panel2,
-BorderSizePixel = 0,
-AutoButtonColor = false,
-Font = Enum.Font.GothamBold,
-Text = "ANALYZE POLY",
-TextColor3 = COLORS.text,
-TextSize = 11,
-}, actionFrame)
-corner(analyzeButton, 9)
-stroke(analyzeButton, COLORS.stroke, 1, 0.1)
- 
-local convertButton = new("TextButton", {
-Name = "Convert",
-Position = UDim2.new(0.36, 4, 0, 0),
-Size = UDim2.new(0.64, -4, 1, 0),
-BackgroundColor3 = COLORS.accent,
-BorderSizePixel = 0,
-AutoButtonColor = false,
-Font = Enum.Font.GothamBold,
-Text = "CONVERT MESH",
-TextColor3 = Color3.fromRGB(255, 255, 255),
-TextSize = 11,
-}, actionFrame)
-corner(convertButton, 9)
-local convertGradient = new("UIGradient", {
-Color = ColorSequence.new({
-ColorSequenceKeypoint.new(0, COLORS.accent),
-ColorSequenceKeypoint.new(1, COLORS.accent2),
-}),
-Rotation = 90,
-}, convertButton)
- 
-local statusLabel = new("TextLabel", {
-Name = "Status",
-Position = UDim2.new(0, 0, 0, 288),
-Size = UDim2.new(1, 0, 0, 28),
-BackgroundTransparency = 1,
-Font = Enum.Font.Gotham,
-Text = "Select a Union, MeshPart, Model, or Folder.",
-TextColor3 = COLORS.muted,
-TextSize = 11,
-TextXAlignment = Enum.TextXAlignment.Left,
-TextTruncate = Enum.TextTruncate.AtEnd,
-}, root)
- 
-local resultsHeader = new("Frame", {
-Name = "ResultsHeader",
-Position = UDim2.new(0, 0, 0, 318),
-Size = UDim2.new(1, 0, 0, 28),
-BackgroundTransparency = 1,
-}, root)
-new("TextLabel", {
-Size = UDim2.new(0.6, 0, 1, 0), BackgroundTransparency = 1,
-Font = Enum.Font.GothamBold, Text = "ANALYZER RESULTS", TextColor3 = COLORS.text,
-TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left,
-}, resultsHeader)
-local analysisHint = new("TextLabel", {
-AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0),
-Size = UDim2.new(0.4, 0, 1, 0), BackgroundTransparency = 1,
-Font = Enum.Font.Gotham, Text = "exact faces / vertices", TextColor3 = COLORS.muted,
-TextSize = 10, TextXAlignment = Enum.TextXAlignment.Right,
-}, resultsHeader)
- 
-local results = new("ScrollingFrame", {
-Name = "Results",
-Position = UDim2.new(0, 0, 0, 348),
-Size = UDim2.new(1, 0, 1, -348),
-BackgroundColor3 = COLORS.panel,
-BorderSizePixel = 0,
-ScrollBarThickness = 4,
-ScrollBarImageColor3 = COLORS.accent,
-CanvasSize = UDim2.fromOffset(0, 0),
-AutomaticCanvasSize = Enum.AutomaticSize.None,
-}, root)
-corner(results, 10)
-stroke(results, COLORS.stroke, 1, 0.25)
-new("UIPadding", {
-PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8),
-PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8),
-}, results)
-local resultsLayout = new("UIListLayout", {
-Padding = UDim.new(0, 7),
-SortOrder = Enum.SortOrder.LayoutOrder,
-}, results)
-resultsLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-    results.CanvasSize = UDim2.fromOffset(0, resultsLayout.AbsoluteContentSize.Y + 16)
-end)
- 
-local function setStatus(text, tone)
-    statusLabel.Text = text
-    if tone == "good" then
-        statusLabel.TextColor3 = COLORS.good
-    elseif tone == "bad" then
-        statusLabel.TextColor3 = COLORS.bad
-    elseif tone == "warn" then
-        statusLabel.TextColor3 = COLORS.medium
-    else
-        statusLabel.TextColor3 = COLORS.muted
-    end
-end
- 
-local function clearResults()
-    for _, child in ipairs(results:GetChildren()) do
-        if child ~= resultsLayout and not child:IsA("UIPadding") then
-            child:Destroy()
+
+    while #output < expectedLength do
+        local token = readInputByte()
+        local literalLength = math.floor(token / 16)
+
+        if literalLength == 15 then
+            repeat
+                local extra = readInputByte()
+                literalLength = literalLength + extra
+            until extra ~= 255
+        end
+
+        for _ = 1, literalLength do
+            output[#output + 1] = readInputByte()
+        end
+
+        if #output >= expectedLength then
+            break
+        end
+
+        local offset = readInputUInt16LE()
+        if offset <= 0 or offset > #output then
+            fail("Offset LZ4 tidak valid: " .. tostring(offset))
+        end
+
+        local matchLength = token % 16
+        if matchLength == 15 then
+            repeat
+                local extra = readInputByte()
+                matchLength = matchLength + extra
+            until extra ~= 255
+        end
+        matchLength = matchLength + 4
+
+        local copyFrom = #output - offset + 1
+        for i = 0, matchLength - 1 do
+            output[#output + 1] = output[copyFrom + i]
         end
     end
+
+    if #output ~= expectedLength then
+        fail("Ukuran hasil LZ4 tidak sesuai")
+    end
+
+    return bytesToString(output)
 end
- 
-local function formatInt(value)
-    if value == nil then
-        return "N/A"
+
+local function externalDecompress(compressed, expectedLength)
+    local environments = {_G}
+    if type(getgenv) == "function" then
+        local ok, env = pcall(getgenv)
+        if ok and type(env) == "table" then
+            environments[#environments + 1] = env
+        end
     end
-    local s = tostring(math.floor(value + 0.5))
-    local sign, int = s:match("^([%-]?)(%d+)$")
-    if not int then
-        return s
+
+    local names = {"zstd_decompress", "lz4_decompress", "decompress"}
+    for _, environment in ipairs(environments) do
+        for _, name in ipairs(names) do
+            local decoder = environment[name]
+            if type(decoder) == "function" then
+                local ok, result = pcall(decoder, compressed)
+                if ok and type(result) == "string" and #result == expectedLength then
+                    return result
+                end
+            end
+        end
     end
-    local formatted = int:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
-    return sign .. formatted
+
+    return nil
 end
- 
-local function complexityFor(triangles)
-    if not triangles then
-        return "UNKNOWN", COLORS.muted
-    elseif triangles <= 5000 then
-        return "LOW", COLORS.good
-    elseif triangles <= 15000 then
-        return "MEDIUM", COLORS.medium
-    elseif triangles <= 30000 then
-        return "HIGH", COLORS.high
-    else
-        return "VERY HIGH", COLORS.bad
-    end
+
+local Reader = {}
+Reader.__index = Reader
+
+function Reader.new(data)
+    return setmetatable({
+        data = data,
+        position = 1,
+        length = #data,
+    }, Reader)
 end
- 
-local function objectKind(obj)
-    if obj:IsA("UnionOperation") then
-        return "UNION"
-    elseif obj:IsA("NegateOperation") then
-        return "NEGATE"
-    elseif obj:IsA("PartOperation") then
-        return "CSG"
-    elseif obj:IsA("MeshPart") then
-        return "MESH"
-    elseif obj:IsA("BasePart") then
-        return "PART"
-    end
-    return obj.ClassName:upper()
+
+function Reader:remaining()
+    return self.length - self.position + 1
 end
- 
-local function addResultCard(obj, triangles, vertices, errorText)
-    local card = new("Frame", {
-    Name = "ResultCard",
-    Size = UDim2.new(1, -4, 0, 66),
-    BackgroundColor3 = COLORS.panel2,
-    BorderSizePixel = 0,
-    }, results)
-    corner(card, 8)
- 
-    local badgeText, badgeColor = complexityFor(triangles)
-    local kind = objectKind(obj)
-    local nameText = obj.Name
-    if #nameText > 38 then
-        nameText = string.sub(nameText, 1, 35) .. "..."
+
+function Reader:take(count)
+    if count < 0 or self.position + count - 1 > self.length then
+        fail("Data RBXM berakhir terlalu cepat")
     end
- 
-    new("TextLabel", {
-    Position = UDim2.new(0, 10, 0, 7),
-    Size = UDim2.new(1, -105, 0, 19),
-    BackgroundTransparency = 1,
-    Font = Enum.Font.GothamSemibold,
-    Text = nameText,
-    TextColor3 = COLORS.text,
-    TextSize = 11,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    TextTruncate = Enum.TextTruncate.AtEnd,
-    }, card)
- 
-    local badge = new("TextLabel", {
-    AnchorPoint = Vector2.new(1, 0),
-    Position = UDim2.new(1, -8, 0, 7),
-    Size = UDim2.new(0, 86, 0, 20),
-    BackgroundColor3 = badgeColor,
-    BackgroundTransparency = 0.82,
-    BorderSizePixel = 0,
-    Font = Enum.Font.GothamBold,
-    Text = badgeText,
-    TextColor3 = badgeColor,
-    TextSize = 9,
-    }, card)
-    corner(badge, 6)
- 
-    local size = obj:IsA("BasePart") and obj.Size or Vector3.zero
-    local detailText
-    if errorText then
-        detailText = string.format("%s  |  Poly unavailable  |  %s", kind, errorText)
-    else
-        detailText = string.format(
-        "%s  |  Tri: %s  |  Vert: %s  |  %.1f x %.1f x %.1f",
-        kind,
-        formatInt(triangles),
-            formatInt(vertices),
-                size.X, size.Y, size.Z
+
+    local value = string.sub(self.data, self.position, self.position + count - 1)
+    self.position = self.position + count
+    return value
+end
+
+function Reader:skip(count)
+    self:take(count)
+end
+
+function Reader:u8()
+    local value = byteAt(self.data, self.position)
+    self.position = self.position + 1
+    return value
+end
+
+function Reader:u16le()
+    local a = self:u8()
+    local b = self:u8()
+    return a + b * 256
+end
+
+function Reader:u32le()
+    local a = self:u8()
+    local b = self:u8()
+    local c = self:u8()
+    local d = self:u8()
+    return a + b * 256 + c * 65536 + d * 16777216
+end
+
+function Reader:i16le()
+    local value = self:u16le()
+    if value >= 32768 then
+        return value - 65536
+    end
+    return value
+end
+
+function Reader:u32be()
+    local a = self:u8()
+    local b = self:u8()
+    local c = self:u8()
+    local d = self:u8()
+    return a * 16777216 + b * 65536 + c * 256 + d
+end
+
+function Reader:string()
+    local length = self:u32le()
+    return self:take(length)
+end
+
+function Reader:ieee32le()
+    local raw = self:u32le()
+    local sign = math.floor(raw / 2147483648)
+    local exponent = math.floor(raw / 8388608) % 256
+    local mantissa = raw % 8388608
+
+    if exponent == 255 then
+        if mantissa == 0 then
+            return sign == 1 and -math.huge or math.huge
+        end
+        return 0 / 0
+    elseif exponent == 0 then
+        if mantissa == 0 then
+            return sign == 1 and -0 or 0
+        end
+        local value = (mantissa / 8388608) * (2 ^ -126)
+        return sign == 1 and -value or value
+    end
+
+    local value = (1 + mantissa / 8388608) * (2 ^ (exponent - 127))
+    return sign == 1 and -value or value
+end
+
+function Reader:ieee64le()
+    local low = self:u32le()
+    local high = self:u32le()
+    local sign = math.floor(high / 2147483648)
+    local exponent = math.floor(high / 1048576) % 2048
+    local mantissaHigh = high % 1048576
+    local mantissa = mantissaHigh * 4294967296 + low
+
+    if exponent == 2047 then
+        if mantissa == 0 then
+            return sign == 1 and -math.huge or math.huge
+        end
+        return 0 / 0
+    elseif exponent == 0 then
+        if mantissa == 0 then
+            return sign == 1 and -0 or 0
+        end
+        local value = (mantissa / 4503599627370496) * (2 ^ -1022)
+        return sign == 1 and -value or value
+    end
+
+    local value = (1 + mantissa / 4503599627370496) * (2 ^ (exponent - 1023))
+    return sign == 1 and -value or value
+end
+
+function Reader:interleavedBE(count, width)
+    if count == 0 then
+        return {}
+    end
+
+    local start = self.position
+    self:skip(count * width)
+    local values = {}
+
+    for i = 1, count do
+        local value = 0
+        for column = 0, width - 1 do
+            value = value * 256 + byteAt(self.data, start + (i - 1) + column * count)
+        end
+        values[i] = value
+    end
+
+    return values
+end
+
+function Reader:interleavedRaw(count, width)
+    local start = self.position
+    self:skip(count * width)
+    local values = {}
+
+    for i = 1, count do
+        local one = {}
+        for column = 0, width - 1 do
+            one[column + 1] = byteAt(self.data, start + (i - 1) + column * count)
+        end
+        values[i] = one
+    end
+
+    return values
+end
+
+function Reader:rbxFloatFromInterleavedRaw(raw)
+    -- RBX float disimpan sebagai IEEE float yang bit-nya diputar satu posisi.
+    local rotated = math.floor(raw / 2) + (raw % 2) * 2147483648
+    local sign = math.floor(rotated / 2147483648)
+    local exponent = math.floor(rotated / 8388608) % 256
+    local mantissa = rotated % 8388608
+
+    if exponent == 255 then
+        if mantissa == 0 then
+            return sign == 1 and -math.huge or math.huge
+        end
+        return 0 / 0
+    elseif exponent == 0 then
+        if mantissa == 0 then
+            return sign == 1 and -0 or 0
+        end
+        local value = (mantissa / 8388608) * (2 ^ -126)
+        return sign == 1 and -value or value
+    end
+
+    local value = (1 + mantissa / 8388608) * (2 ^ (exponent - 127))
+    return sign == 1 and -value or value
+end
+
+function Reader:rbxFloats(count)
+    local encoded = self:interleavedBE(count, 4)
+    local values = {}
+    for i, raw in ipairs(encoded) do
+        values[i] = self:rbxFloatFromInterleavedRaw(raw)
+    end
+    return values
+end
+
+local function untransformInteger(value)
+    if value % 2 == 0 then
+        return value / 2
+    end
+    return -(value + 1) / 2
+end
+
+function Reader:referents(count)
+    local encoded = self:interleavedBE(count, 4)
+    local values = {}
+    local last = 0
+
+    for i, value in ipairs(encoded) do
+        last = last + untransformInteger(value)
+        values[i] = last
+    end
+
+    return values
+end
+
+local ORIENTATION_MATRICES = {
+    [0x02] = {1, 0, 0, 0, 1, 0, 0, 0, 1},
+    [0x03] = {1, 0, 0, 0, 0, -1, 0, 1, 0},
+    [0x05] = {1, 0, 0, 0, -1, 0, 0, 0, -1},
+    [0x06] = {1, 0, 0, 0, 0, 1, 0, -1, 0},
+    [0x07] = {0, 1, 0, 1, 0, 0, 0, 0, -1},
+    [0x09] = {0, 0, 1, 1, 0, 0, 0, 1, 0},
+    [0x0a] = {0, -1, 0, 1, 0, 0, 0, 0, 1},
+    [0x0c] = {0, 0, -1, 1, 0, 0, 0, -1, 0},
+    [0x0d] = {0, 1, 0, 0, 0, 1, 1, 0, 0},
+    [0x0e] = {0, 0, -1, 0, 1, 0, 1, 0, 0},
+    [0x10] = {0, -1, 0, 0, 0, -1, 1, 0, 0},
+    [0x11] = {0, 0, 1, 0, -1, 0, 1, 0, 0},
+    [0x14] = {-1, 0, 0, 0, 1, 0, 0, 0, -1},
+    [0x15] = {-1, 0, 0, 0, 0, 1, 0, 1, 0},
+    [0x17] = {-1, 0, 0, 0, -1, 0, 0, 0, 1},
+    [0x18] = {-1, 0, 0, 0, 0, -1, 0, -1, 0},
+    [0x19] = {0, 1, 0, -1, 0, 0, 0, 0, 1},
+    [0x1b] = {0, 0, -1, -1, 0, 0, 0, 1, 0},
+    [0x1c] = {0, -1, 0, -1, 0, 0, 0, 0, -1},
+    [0x1e] = {0, 0, 1, -1, 0, 0, 0, -1, 0},
+    [0x1f] = {0, 1, 0, 0, 0, -1, -1, 0, 0},
+    [0x20] = {0, 0, 1, 0, 1, 0, -1, 0, 0},
+    [0x22] = {0, -1, 0, 0, 0, 1, -1, 0, 0},
+    [0x23] = {0, 0, -1, 0, -1, 0, -1, 0, 0},
+}
+
+local function readCFrames(reader, count)
+    local rotations = {}
+
+    for i = 1, count do
+        local id = reader:u8()
+        if id == 0 then
+            local matrix = {}
+            for j = 1, 9 do
+                matrix[j] = reader:ieee32le()
+            end
+            rotations[i] = matrix
+        else
+            local matrix = ORIENTATION_MATRICES[id]
+            if matrix == nil then
+                fail("Orientation CFrame tidak dikenal: " .. tostring(id))
+            end
+            rotations[i] = matrix
+        end
+    end
+
+    local xs = reader:rbxFloats(count)
+    local ys = reader:rbxFloats(count)
+    local zs = reader:rbxFloats(count)
+    local values = {}
+
+    for i = 1, count do
+        local matrix = rotations[i]
+        local args = {
+            xs[i], ys[i], zs[i],
+            matrix[1], matrix[2], matrix[3],
+            matrix[4], matrix[5], matrix[6],
+            matrix[7], matrix[8], matrix[9],
+        }
+        values[i] = CFrame.new(table.unpack(args))
+    end
+
+    return values
+end
+
+local function readFaces(reader, count)
+    local values = {}
+    for i = 1, count do
+        local mask = reader:u8()
+        values[i] = Faces.new(
+            mask % 2 == 1,
+            math.floor(mask / 2) % 2 == 1,
+            math.floor(mask / 4) % 2 == 1,
+            math.floor(mask / 8) % 2 == 1,
+            math.floor(mask / 16) % 2 == 1,
+            math.floor(mask / 32) % 2 == 1
+        )
+    end
+    return values
+end
+
+local function readAxes(reader, count)
+    local values = {}
+    for i = 1, count do
+        local mask = reader:u8()
+        values[i] = Axes.new(
+            mask % 2 == 1,
+            math.floor(mask / 2) % 2 == 1,
+            math.floor(mask / 4) % 2 == 1
+        )
+    end
+    return values
+end
+
+local function decodePropertyValues(reader, typeId, count, file)
+    local values = {}
+
+    if typeId == 0x01 then
+        for i = 1, count do
+            values[i] = reader:string()
+        end
+
+    elseif typeId == 0x02 then
+        for i = 1, count do
+            values[i] = reader:u8() == 1
+        end
+
+    elseif typeId == 0x03 then
+        local encoded = reader:interleavedBE(count, 4)
+        for i, value in ipairs(encoded) do
+            values[i] = untransformInteger(value)
+        end
+
+    elseif typeId == 0x04 then
+        values = reader:rbxFloats(count)
+
+    elseif typeId == 0x05 then
+        for i = 1, count do
+            values[i] = reader:ieee64le()
+        end
+
+    elseif typeId == 0x06 then
+        local scales = reader:rbxFloats(count)
+        local offsets = reader:interleavedBE(count, 4)
+        for i = 1, count do
+            values[i] = UDim.new(scales[i], untransformInteger(offsets[i]))
+        end
+
+    elseif typeId == 0x07 then
+        local xScales = reader:rbxFloats(count)
+        local yScales = reader:rbxFloats(count)
+        local xOffsets = reader:interleavedBE(count, 4)
+        local yOffsets = reader:interleavedBE(count, 4)
+        for i = 1, count do
+            values[i] = UDim2.new(
+                xScales[i], untransformInteger(xOffsets[i]),
+                yScales[i], untransformInteger(yOffsets[i])
+            )
+        end
+
+    elseif typeId == 0x08 then
+        for i = 1, count do
+            values[i] = Ray.new(
+                Vector3.new(reader:ieee32le(), reader:ieee32le(), reader:ieee32le()),
+                Vector3.new(reader:ieee32le(), reader:ieee32le(), reader:ieee32le())
+            )
+        end
+
+    elseif typeId == 0x09 then
+        values = readFaces(reader, count)
+
+    elseif typeId == 0x0a then
+        values = readAxes(reader, count)
+
+    elseif typeId == 0x0b then
+        local encoded = reader:interleavedBE(count, 4)
+        for i, value in ipairs(encoded) do
+            values[i] = BrickColor.new(value)
+        end
+
+    elseif typeId == 0x0c then
+        local rs = reader:rbxFloats(count)
+        local gs = reader:rbxFloats(count)
+        local bs = reader:rbxFloats(count)
+        for i = 1, count do
+            values[i] = Color3.new(rs[i], gs[i], bs[i])
+        end
+
+    elseif typeId == 0x0d then
+        local xs = reader:rbxFloats(count)
+        local ys = reader:rbxFloats(count)
+        for i = 1, count do
+            values[i] = Vector2.new(xs[i], ys[i])
+        end
+
+    elseif typeId == 0x0e then
+        local xs = reader:rbxFloats(count)
+        local ys = reader:rbxFloats(count)
+        local zs = reader:rbxFloats(count)
+        for i = 1, count do
+            values[i] = Vector3.new(xs[i], ys[i], zs[i])
+        end
+
+    elseif typeId == 0x10 then
+        values = readCFrames(reader, count)
+
+    elseif typeId == 0x12 then
+        values = reader:interleavedBE(count, 4)
+
+    elseif typeId == 0x13 then
+        local refs = reader:referents(count)
+        for i, ref in ipairs(refs) do
+            values[i] = {__rbxmReference = true, ref = ref}
+        end
+
+    elseif typeId == 0x14 then
+        for i = 1, count do
+            values[i] = Vector3int16.new(reader:i16le(), reader:i16le(), reader:i16le())
+        end
+
+    elseif typeId == 0x15 then
+        for i = 1, count do
+            local keypointCount = reader:u32le()
+            local keypoints = {}
+            for j = 1, keypointCount do
+                keypoints[j] = NumberSequenceKeypoint.new(
+                    reader:ieee32le(),
+                    reader:ieee32le(),
+                    reader:ieee32le()
                 )
             end
-            new("TextLabel", {
-            Position = UDim2.new(0, 10, 0, 31),
-            Size = UDim2.new(1, -20, 0, 26),
-            BackgroundTransparency = 1,
-            Font = Enum.Font.Gotham,
-            Text = detailText,
-            TextColor3 = errorText and COLORS.high or COLORS.muted,
-            TextSize = 10,
-            TextXAlignment = Enum.TextXAlignment.Left,
-            TextWrapped = true,
-            }, card)
+            values[i] = NumberSequence.new(keypoints)
         end
- 
-        local function collectSelectionObjects(includeBaseParts)
-            local selected = Selection:Get()
-            local found = {}
-            local list = {}
- 
-            local function consider(obj)
-                local eligible = obj:IsA("PartOperation") or obj:IsA("MeshPart")
-                if includeBaseParts then
-                    eligible = eligible or obj:IsA("BasePart")
-                end
-                if eligible and not found[obj] then
-                    found[obj] = true
-                    table.insert(list, obj)
-                end
+
+    elseif typeId == 0x16 then
+        for i = 1, count do
+            local keypointCount = reader:u32le()
+            local keypoints = {}
+            for j = 1, keypointCount do
+                local time = reader:ieee32le()
+                local color = Color3.new(reader:ieee32le(), reader:ieee32le(), reader:ieee32le())
+                reader:ieee32le() -- envelope tersimpan tetapi tidak dipakai ColorSequence
+                keypoints[j] = ColorSequenceKeypoint.new(time, color)
             end
- 
-            for _, rootObj in ipairs(selected) do
-                consider(rootObj)
-                if settings.scanDescendants then
-                    for _, descendant in ipairs(rootObj:GetDescendants()) do
-                        consider(descendant)
-                    end
-                end
-            end
-            return list
+            values[i] = ColorSequence.new(keypoints)
         end
- 
-        local function collectConvertible()
-            local all = collectSelectionObjects(false)
-            local result = {}
-            for _, obj in ipairs(all) do
-                if obj:IsA("PartOperation") then
-                    table.insert(result, obj)
-                end
-            end
-            return result
+
+    elseif typeId == 0x17 then
+        for i = 1, count do
+            values[i] = NumberRange.new(reader:ieee32le(), reader:ieee32le())
         end
- 
-        local function refreshSelectionSummary()
-            local selected = Selection:Get()
-            selectionBadge.Text = tostring(#selected) .. " selected"
- 
-            local all = collectSelectionObjects(true)
-            local unionCount, meshCount = 0, 0
-            for _, obj in ipairs(all) do
-                if obj:IsA("PartOperation") then
-                    unionCount = unionCount + 1
-                elseif obj:IsA("MeshPart") then
-                    meshCount = meshCount + 1
-                end
-            end
-            metricUnions.Text = "CSG: " .. formatInt(unionCount)
-            metricMeshes.Text = "MeshParts: " .. formatInt(meshCount)
+
+    elseif typeId == 0x18 then
+        local minXs = reader:rbxFloats(count)
+        local minYs = reader:rbxFloats(count)
+        local maxXs = reader:rbxFloats(count)
+        local maxYs = reader:rbxFloats(count)
+        for i = 1, count do
+            values[i] = Rect.new(minXs[i], minYs[i], maxXs[i], maxYs[i])
         end
- 
-        --[[
-        CSG extraction note
-        -------------------
-        Roblox GeometryService MeshPart outputs are currently session-only and their mesh
-        content cannot reliably be reopened with CreateEditableMeshAsync. For PartOperation
-        conversion we therefore do NOT use FragmentAsync anymore.
- 
-        The CSG SolidMesh extraction/parser below is adapted from EgoMoose's
-        rbx-csg-to-mesh-plugin, and the LZ4 block reader is adapted from llz4.
- 
-        MIT License - Copyright (c) 2025 EgoMoose
-        MIT License - Copyright (c) 2025 RiskoZoSlovenska
-        Permission is hereby granted, free of charge, to any person obtaining a copy of
-        this software and associated documentation files (the "Software"), to deal in
-        the Software without restriction, including without limitation the rights to
-        use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
-        of the Software, and to permit persons to whom the Software is furnished to do
-        so, subject to the following conditions: the above copyright notice and this
-        permission notice shall be included in all copies or substantial portions of
-        the Software. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-        EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-        MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO
-        EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
-        OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-        FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-        THE SOFTWARE.
-        ]]
- 
-        local RBXM_MAGIC = "<roblox!\x89\xff\x0d\x0a\x1a\x0a"
-        local ZSTD_HEADER = "\x28\xB5\x2F\xFD"
-        local SOLID_PADDING = 14
-        local SOLID_HEADER = "SolidMesh\x00\x00\x00\x00"
- 
-        local function newBufferStream(b)
-            local stream = {buffer = b, position = 0}
-            function stream:readu8()
-                local value = buffer.readu8(self.buffer, self.position)
-                self.position = self.position + 1
-                return value
+
+    elseif typeId == 0x19 then
+        for i = 1, count do
+            local flags = reader:u8()
+            if flags % 2 == 1 then
+                local density = reader:ieee32le()
+                local friction = reader:ieee32le()
+                local elasticity = reader:ieee32le()
+                local frictionWeight = reader:ieee32le()
+                local elasticityWeight = reader:ieee32le()
+                local acousticAbsorption = 1
+                if math.floor(flags / 2) % 2 == 1 then
+                    acousticAbsorption = reader:ieee32le()
+                end
+                local ok, physical = pcall(
+                    PhysicalProperties.new,
+                    density,
+                    friction,
+                    elasticity,
+                    frictionWeight,
+                    elasticityWeight,
+                    acousticAbsorption
+                )
+                if not ok then
+                    physical = PhysicalProperties.new(
+                        density,
+                        friction,
+                        elasticity,
+                        frictionWeight,
+                        elasticityWeight
+                    )
+                end
+                values[i] = physical
+            else
+                if math.floor(flags / 2) % 2 == 1 then
+                    reader:ieee32le()
+                end
+                values[i] = nil
             end
-            function stream:readu16()
-                local value = buffer.readu16(self.buffer, self.position)
-                self.position = self.position + 2
-                return value
-            end
-            function stream:readu32()
-                local value = buffer.readu32(self.buffer, self.position)
-                self.position = self.position + 4
-                return value
-            end
-            function stream:readf32()
-                local value = buffer.readf32(self.buffer, self.position)
-                self.position = self.position + 4
-                return value
-            end
-            function stream:readString(count)
-                local value = buffer.readstring(self.buffer, self.position, count)
-                self.position = self.position + count
-                return value
-            end
-            function stream:skip(count)
-                self.position = self.position + count
-            end
-            return stream
         end
- 
-        -- Minimal LZ4 block decompressor for RBXM chunks. RBXM provides the exact
-        -- uncompressed length so this implementation can use a fixed output buffer.
-        local function lz4DecompressExact(data, expectedLength)
-            local band, rshift = bit32.band, bit32.rshift
-            local MIN_MATCH = 4
-            local LIT_COUNT_MASK = 15
-            local MATCH_LEN_MASK = 15
-            local MATCH_LEN_BITS = 4
- 
-            local dataLength = buffer.len(data)
-            local out = buffer.create(expectedLength)
-            local pos = 0
-            local outNext = 0
- 
-            while pos < dataLength do
-                local token = buffer.readu8(data, pos)
-                pos = pos + 1
- 
-                local literalCount = rshift(token, MATCH_LEN_BITS)
-                if literalCount == LIT_COUNT_MASK then
-                    local lenPart
-                    repeat
-                    assert(pos < dataLength, "Invalid LZ4 literal length")
-                    lenPart = buffer.readu8(data, pos)
-                    pos = pos + 1
-                    literalCount = literalCount + lenPart
-                    until lenPart < 0xFF
-                end
- 
-                assert(pos + literalCount <= dataLength, "Invalid LZ4 literal range")
-                assert(outNext + literalCount <= expectedLength, "LZ4 output overflow")
-                if literalCount > 0 then
-                    buffer.copy(out, outNext, data, pos, literalCount)
-                end
-                outNext = outNext + literalCount
-                pos = pos + literalCount
- 
-                if pos >= dataLength then
-                    break
-                end
- 
-                assert(pos + 2 <= dataLength, "Invalid LZ4 match offset")
-                local matchLength = band(token, MATCH_LEN_MASK)
-                local matchOffset = buffer.readu16(data, pos)
-                pos = pos + 2
-                assert(matchOffset > 0 and matchOffset <= outNext, "Invalid LZ4 back-reference")
- 
-                if matchLength == MATCH_LEN_MASK then
-                    local lenPart
-                    repeat
-                    assert(pos < dataLength, "Invalid LZ4 match length")
-                    lenPart = buffer.readu8(data, pos)
-                    pos = pos + 1
-                    matchLength = matchLength + lenPart
-                    until lenPart < 0xFF
-                end
-                matchLength = matchLength + MIN_MATCH
-                assert(outNext + matchLength <= expectedLength, "LZ4 output overflow")
- 
-                while matchLength > matchOffset do
-                    buffer.copy(out, outNext, out, outNext - matchOffset, matchOffset)
-                    outNext = outNext + matchOffset
-                    matchLength = matchLength - matchOffset
-                end
-                if matchLength > 0 then
-                    buffer.copy(out, outNext, out, outNext - matchOffset, matchLength)
-                    outNext = outNext + matchLength
-                end
-            end
- 
-            assert(outNext == expectedLength, string.format("LZ4 size mismatch (%d/%d)", outNext, expectedLength))
-            return out
+
+    elseif typeId == 0x1a then
+        local colors = reader:interleavedBE(count, 3)
+        for i, value in ipairs(colors) do
+            local r = math.floor(value / 65536) % 256
+            local g = math.floor(value / 256) % 256
+            local b = value % 256
+            values[i] = Color3.fromRGB(r, g, b)
         end
- 
-        local function decodeRBXMChunk(payload, compressedLength, uncompressedLength)
-            if compressedLength == 0 then
-                return buffer.fromstring(payload)
+
+    elseif typeId == 0x1b then
+        -- Int64 tidak selalu aman direpresentasikan sebagai number Lua.
+        -- Simpan nilai kecil; nilai besar diberi marker agar tidak rusak.
+        local rawValues = reader:interleavedRaw(count, 8)
+        for i, raw in ipairs(rawValues) do
+            local value = 0
+            for _, byte in ipairs(raw) do
+                value = value * 256 + byte
             end
-            local compressed = buffer.fromstring(payload)
-            if compressedLength >= 4 and buffer.readstring(compressed, 0, 4) == ZSTD_HEADER then
-                return EncodingService:DecompressBuffer(compressed, Enum.CompressionAlgorithm.Zstd)
+            if value <= 9007199254740991 then
+                values[i] = untransformInteger(value)
+            else
+                values[i] = {__rbxmUnsupported = true}
             end
-            return lz4DecompressExact(compressed, uncompressedLength)
         end
- 
-        local function extractSolidMeshSharedString(serialized)
-            assert(typeof(serialized) == "buffer", "SerializationService returned unexpected data type")
-            local stream = newBufferStream(serialized)
-            assert(stream:readString(#RBXM_MAGIC) == RBXM_MAGIC, "Serialized RBXM header mismatch")
-            local modelVersion = stream:readu16()
-            assert(modelVersion == 0, "Unsupported RBXM model version")
-            stream:readu32() -- class count
-            stream:readu32() -- instance count
-            stream:skip(8)
- 
-            while stream.position + 16 <= buffer.len(serialized) do
-                local chunkType = stream:readString(4)
-                local compressedLength = stream:readu32()
-                local uncompressedLength = stream:readu32()
-                stream:skip(4)
-                local storedLength = compressedLength ~= 0 and compressedLength or uncompressedLength
-                assert(storedLength >= 0 and stream.position + storedLength <= buffer.len(serialized), "Malformed RBXM chunk")
-                local payload = stream:readString(storedLength)
- 
-                if chunkType == "SSTR" then
-                    local content = decodeRBXMChunk(payload, compressedLength, uncompressedLength)
-                    local s = newBufferStream(content)
-                    s:readu32() -- SSTR version
-                    local count = s:readu32()
-                    for _ = 1, count do
-                        s:skip(16) -- hash
-                        local length = s:readu32()
-                        local shared = s:readString(length)
-                        local b = buffer.fromstring(shared)
-                        if buffer.len(b) >= SOLID_PADDING + #SOLID_HEADER
-                            and buffer.readstring(b, SOLID_PADDING, #SOLID_HEADER) == SOLID_HEADER then
-                            return b
-                        end
-                    end
-                elseif chunkType == "END\0" then
-                    break
-                end
+
+    elseif typeId == 0x1c then
+        local indices = reader:interleavedBE(count, 4)
+        for i, index in ipairs(indices) do
+            values[i] = file.sharedStrings[index]
+            if values[i] == nil then
+                values[i] = ""
             end
-            return nil
         end
- 
-        local function signedByte(value)
-            if value >= 128 then
-                return value - 256
-            end
-            return value
+
+    elseif typeId == 0x1d then
+        for i = 1, count do
+            values[i] = reader:string()
         end
- 
-        local function readIndexStateMachine(count, stream)
-            local index = 0
-            local indices = table.create(count)
-            for i = 1, count do
-                local v0 = stream:readu8()
-                if bit32.band(v0, bit32.lshift(1, 7)) == 0 then
-                    if bit32.band(v0, bit32.lshift(1, 6)) == 0 then
-                        index = index + v0
-                    else
-                        index = index + signedByte(bit32.bor(v0, 0x80))
-                    end
-                else
-                    local v1 = stream:readu8()
-                    local v2 = stream:readu8()
-                    index = index + bit32.bor(v2, bit32.lshift(v1, 8), bit32.lshift(bit32.band(v0, 0x7F), 16))
-                end
-                indices[i] = bit32.band(index, 0x7FFFFF)
-            end
-            return indices
+
+    elseif typeId == 0x1e then
+        local nestedType = reader:u8()
+        if nestedType ~= 0x10 then
+            fail("OptionalCoordinateFrame berisi type CFrame yang tidak dikenal")
         end
- 
-        local function parseSolidMesh(b)
-            local stream = newBufferStream(b)
-            stream:skip(SOLID_PADDING)
-            assert(stream:readString(#SOLID_HEADER) == SOLID_HEADER, "Buffer is not a SolidMesh")
- 
-            local positions = {}
-            local nPositions = stream:readu32()
-            stream:readu32()
-            for i = 1, nPositions do
-                positions[i] = Vector3.new(stream:readf32(), stream:readf32(), stream:readf32())
-            end
- 
-            local normals = {}
-            local nNormals = stream:readu32()
-            stream:readu32()
-            for i = 1, nNormals do
-                normals[i] = Vector3.new(stream:readf32(), stream:readf32(), stream:readf32())
-            end
- 
-            -- Unknown pair data in the SolidMesh format (likely UV data).
-            local unknown1 = stream:readu32()
-            stream:readu32()
-            for _ = 1, unknown1 do
-                stream:readf32()
-                stream:readf32()
-            end
- 
-            local colors = {}
-            local nColors = stream:readu32()
-            stream:readu32()
-            for i = 1, nColors do
-                colors[i] = {stream:readf32(), stream:readf32(), stream:readf32()}
-            end
- 
-            local nFacesData = stream:readu32()
-            stream:readu32()
-            local faces = readIndexStateMachine(nFacesData, stream)
- 
-            local nFaceNormalsData = stream:readu32()
-            stream:readu32()
-            local faceNormals = readIndexStateMachine(nFaceNormalsData, stream)
- 
-            local nFaceUnknownData = stream:readu32()
-            stream:readu32()
-            if nFaceUnknownData > 0 then
-                -- Consume the data so malformed cursor state doesn't hide the useful error.
-                pcall(function()
-                    readIndexStateMachine(nFaceUnknownData, stream)
-                end)
-                error("Unsupported SolidMesh face data detected")
-            end
- 
-            local nFaceColorsData = stream:readu32()
-            stream:readu32()
-            local faceColors = readIndexStateMachine(nFaceColorsData, stream)
- 
-            return {
-            positions = positions,
-            normals = normals,
-            colors = colors,
-            faces = faces,
-            faceNormals = faceNormals,
-            faceColors = faceColors,
+        local frames = readCFrames(reader, count)
+        local boolType = reader:u8()
+        if boolType ~= 0x02 then
+            fail("OptionalCoordinateFrame tidak memiliki array bool")
+        end
+        for i = 1, count do
+            local present = reader:u8() == 1
+            values[i] = present and frames[i] or nil
+        end
+
+    elseif typeId == 0x1f then
+        local rawValues = reader:interleavedRaw(count, 16)
+        for i = 1, count do
+            values[i] = {__rbxmUnsupported = true, raw = rawValues[i]}
+        end
+
+    elseif typeId == 0x20 then
+        for i = 1, count do
+            values[i] = {
+                __rbxmFont = true,
+                family = reader:string(),
+                weight = reader:u16le(),
+                style = reader:u8(),
+                cachedFaceId = reader:string(),
             }
         end
- 
-        local function solidMeshFromPart(part)
-            local localUnion = nil
-            local unionOk, unionErr = pcall(function()
-                local options = {SplitApart = false}
-                if part:IsA("PartOperation") then
-                    options.CollisionFidelity = part.CollisionFidelity
-                    options.RenderFidelity = part.RenderFidelity
-                    options.FluidFidelity = part.FluidFidelity
-                end
-                local outputs = GeometryService:UnionAsync(part, {}, options)
-                localUnion = outputs and outputs[1] or nil
-            end)
-            if not unionOk or not localUnion then
-                return nil, "could not make local CSG copy: " .. tostring(unionErr)
-            end
- 
-            local serialized = nil
-            local serializeOk, serializeErr = pcall(function()
-                serialized = SerializationService:SerializeInstancesAsync({localUnion})
-            end)
-            localUnion:Destroy()
-            if not serializeOk or not serialized then
-                return nil, "could not serialize CSG: " .. tostring(serializeErr)
-            end
- 
-            local solidBuffer = nil
-            local extractOk, extractErr = pcall(function()
-                solidBuffer = extractSolidMeshSharedString(serialized)
-            end)
-            if not extractOk or not solidBuffer then
-                return nil, "could not locate SolidMesh data: " .. tostring(extractErr or "not found")
-            end
- 
-            local solid = nil
-            local parseOk, parseErr = pcall(function()
-                solid = parseSolidMesh(solidBuffer)
-            end)
-            if not parseOk or not solid then
-                return nil, "could not parse SolidMesh data: " .. tostring(parseErr)
-            end
-            return solid, nil
+
+    elseif typeId == 0x21 then
+        -- SecurityCapabilities/Capabilities: 64-bit bitfield. Tidak writable
+        -- melalui assignment runtime biasa, tetapi byte-nya tetap dikonsumsi.
+        reader:skip(count * 8)
+        for i = 1, count do
+            values[i] = {__rbxmUnsupported = true}
         end
- 
-        local function buildEditableFromSolid(solid, useColorData)
-            local editable = AssetService:CreateEditableMesh()
-            if not editable then
-                return nil, "EditableMesh memory budget unavailable"
-            end
- 
-            local ok, err = pcall(function()
-                local vertexIds = table.create(#solid.positions)
-                for i, position in ipairs(solid.positions) do
-                    vertexIds[i] = editable:AddVertex(position)
-                end
- 
-                local normalIds = table.create(#solid.normals)
-                for i, normal in ipairs(solid.normals) do
-                    normalIds[i] = editable:AddNormal(normal)
-                end
- 
-                local colorIds = {}
-                if useColorData then
-                    for i, rgb in ipairs(solid.colors) do
-                        colorIds[i] = editable:AddColor(Color3.new(rgb[1], rgb[2], rgb[3]), 1)
-                    end
-                end
- 
-                for i = 1, #solid.faces, 3 do
-                    local a = vertexIds[(solid.faces[i] or -1) + 1]
-                    local b = vertexIds[(solid.faces[i + 1] or -1) + 1]
-                    local c = vertexIds[(solid.faces[i + 2] or -1) + 1]
-                    assert(a and b and c, "SolidMesh contains invalid vertex index")
-                    local faceId = editable:AddTriangle(a, b, c)
- 
-                    local n1 = normalIds[(solid.faceNormals[i] or -1) + 1]
-                    local n2 = normalIds[(solid.faceNormals[i + 1] or -1) + 1]
-                    local n3 = normalIds[(solid.faceNormals[i + 2] or -1) + 1]
-                    if n1 and n2 and n3 then
-                        editable:SetFaceNormals(faceId, {n1, n2, n3})
-                    end
- 
-                    if useColorData then
-                        local c1 = colorIds[(solid.faceColors[i] or -1) + 1]
-                        local c2 = colorIds[(solid.faceColors[i + 1] or -1) + 1]
-                        local c3 = colorIds[(solid.faceColors[i + 2] or -1) + 1]
-                        if c1 and c2 and c3 then
-                            editable:SetFaceColors(faceId, {c1, c2, c3})
-                        end
-                    end
-                end
-            end)
- 
-            if not ok then
-                editable:Destroy()
-                return nil, tostring(err)
-            end
-            return editable, nil
+
+    elseif typeId == 0x22 then
+        -- Content modern: satu SourceType untuk tiap nilai property, lalu daftar
+        -- URI dan referent object. URI adalah bentuk yang paling umum untuk mesh.
+        local sourceTypes = reader:interleavedBE(count, 4)
+        local uriCount = reader:u32le()
+        local uris = {}
+        for i = 1, uriCount do
+            uris[i] = reader:string()
         end
- 
-        -- Used only for already-existing MeshParts. PartOperations are analyzed directly
-        -- from their serialized SolidMesh data so this no longer touches FragmentAsync.
-        local function getEditableMeshFromMeshPart(meshPart)
-            local content = meshPart.MeshContent
-            local editable = nil
-            local ok, err = pcall(function()
-                editable = AssetService:CreateEditableMeshAsync(content, {FixedSize = true})
-            end)
-            if ok and editable then
-                return editable, true, nil
+        local objectCount = reader:u32le()
+        local objectRefs = reader:referents(objectCount)
+        local externalCount = reader:u32le()
+        local externalRefs = reader:referents(externalCount)
+        local uriIndex = 1
+        local objectIndex = 1
+        local externalIndex = 1
+
+        for i = 1, count do
+            local sourceType = sourceTypes[i]
+            if sourceType == 1 then
+                values[i] = {__rbxmContent = true, uri = uris[uriIndex] or ""}
+                uriIndex = uriIndex + 1
+            elseif sourceType == 2 then
+                values[i] = {
+                    __rbxmReference = true,
+                    ref = objectRefs[objectIndex],
+                }
+                objectIndex = objectIndex + 1
+            else
+                values[i] = nil
             end
-            return nil, false, tostring(err or "mesh data unavailable")
         end
- 
-        local function analyzeMesh(meshPart)
-            local editable, shouldDestroy, err = getEditableMeshFromMeshPart(meshPart)
-            if not editable then
-                return nil, nil, "mesh data blocked/unavailable: " .. tostring(err)
+        -- externalRefs sengaja dibaca untuk menjaga pointer; belum dapat
+        -- direferensikan ke instance luar file.
+        externalIndex = externalIndex + #externalRefs
+
+    else
+        fail(string.format("Tipe property RBXM belum didukung: 0x%02X", typeId))
+    end
+
+    return values
+end
+
+local function decodeRbxm(data)
+    local reader = Reader.new(data)
+    if reader:take(8) ~= "<roblox!" then
+        fail("File bukan RBXM binary: magic header tidak cocok")
+    end
+    if reader:take(6) ~= string.char(0x89, 0xff, 0x0d, 0x0a, 0x1a, 0x0a) then
+        fail("Header RBXM tidak valid")
+    end
+
+    local version = reader:u16le()
+    if version ~= 0 then
+        fail("Versi RBXM tidak didukung: " .. tostring(version))
+    end
+
+    local classCount = reader:u32le()
+    local instanceCount = reader:u32le()
+    reader:skip(8)
+
+    local file = {
+        classCount = classCount,
+        instanceCount = instanceCount,
+        sharedStrings = {},
+        groups = {},
+        groupById = {},
+        nodesByRef = {},
+        parentByRef = {},
+        propertyRecords = {},
+    }
+
+    while reader:remaining() > 0 do
+        local chunkName = reader:take(4)
+        local compressedLength = reader:u32le()
+        local decompressedLength = reader:u32le()
+        reader:skip(4)
+
+        local chunkData
+        if compressedLength == 0 then
+            chunkData = reader:take(decompressedLength)
+        else
+            local compressed = reader:take(compressedLength)
+            chunkData = externalDecompress(compressed, decompressedLength)
+            if chunkData == nil then
+                if string.sub(compressed, 1, 4) == string.char(0x28, 0xb5, 0x2f, 0xfd) then
+                    fail("Chunk memakai Zstandard, tetapi executor tidak menyediakan zstd_decompress")
+                end
+                chunkData = lz4Decompress(compressed, decompressedLength)
             end
-            local faces, vertices
-            local faceOk = pcall(function() faces = editable:GetFaces() end)
-                local vertexOk = pcall(function() vertices = editable:GetVertices() end)
-                    if shouldDestroy then
-                        pcall(function() editable:Destroy() end)
-                        end
-                            if not faceOk or not vertexOk then
-                                return nil, nil, "could not read EditableMesh"
-                            end
-                            return #faces, #vertices, nil
-                        end
- 
-                        local function analyzeObject(obj)
-                            if obj:IsA("MeshPart") then
-                                return analyzeMesh(obj)
-                            elseif obj:IsA("PartOperation") then
-                                local solid, err = solidMeshFromPart(obj)
-                                if not solid then
-                                    return nil, nil, err
-                                end
-                                return math.floor(#solid.faces / 3), #solid.positions, nil
-                            end
-                            return nil, nil, "not a mesh/CSG object"
-                        end
- 
-                        local busy = false
- 
-                        local function setBusy(value)
-                            busy = value
-                            analyzeButton.Active = not value
-                            convertButton.Active = not value
-                            analyzeButton.TextTransparency = value and 0.45 or 0
-                            convertButton.TextTransparency = value and 0.45 or 0
-                            convertGradient.Enabled = true
-                        end
- 
-                        local function runAnalysis()
-                            if busy then return end
-                            setBusy(true)
-                            clearResults()
-                            metricTriangles.Text = "Triangles: ..."
-                            metricVertices.Text = "Vertices: ..."
- 
-                            task.spawn(function()
-                                local targets = collectSelectionObjects(false)
-                                if #targets == 0 then
-                                    metricTriangles.Text = "Triangles: 0"
-                                    metricVertices.Text = "Vertices: 0"
-                                    setStatus("No Union/CSG or MeshPart found in the current selection.", "warn")
-                                    setBusy(false)
-                                    return
-                                end
- 
-                                local analyzeCount = math.min(#targets, MAX_ANALYZE)
-                                local totalFaces, totalVertices, successful = 0, 0, 0
-                                for i = 1, analyzeCount do
-                                    local obj = targets[i]
-                                    setStatus(string.format("Analyzing %d/%d: %s", i, analyzeCount, obj.Name))
-                                    local faces, vertices, err = analyzeObject(obj)
-                                    if faces and vertices then
-                                        totalFaces = totalFaces + faces
-                                        totalVertices = totalVertices + vertices
-                                        successful = successful + 1
-                                    end
-                                    addResultCard(obj, faces, vertices, err)
-                                    task.wait()
-                                end
- 
-                                metricTriangles.Text = "Triangles: " .. formatInt(totalFaces)
-                                metricVertices.Text = "Vertices: " .. formatInt(totalVertices)
-                                if #targets > MAX_ANALYZE then
-                                    setStatus(string.format("Analyzed first %d of %d mesh/CSG objects. Selection is very large.", MAX_ANALYZE, #targets), "warn")
-                                elseif successful == #targets then
-                                    setStatus(string.format("Analysis complete: %s triangles across %d object(s).", formatInt(totalFaces), successful), "good")
-                                else
-                                    setStatus(string.format("Analysis complete: %d/%d object(s) returned poly data.", successful, #targets), "warn")
-                                end
-                                setBusy(false)
-                            end)
-                        end
- 
-                        local COPY_PROPERTIES = {
-                        "Anchored", "CanCollide", "CanQuery", "CanTouch", "CastShadow",
-                        "CollisionGroup", "CustomPhysicalProperties", "Massless", "RootPriority",
-                        "Transparency", "Reflectance", "Material", "MaterialVariant", "Color",
-                        "Locked", "Archivable", "PivotOffset",
-                        }
- 
-                        local function copyProperties(source, destination)
-                            for _, property in ipairs(COPY_PROPERTIES) do
-                                pcall(function()
-                                    destination[property] = source[property]
-                                end)
-                            end
-                            pcall(function()
-                                destination.CollisionFidelity = source.CollisionFidelity
-                            end)
-                            pcall(function()
-                                destination.RenderFidelity = source.RenderFidelity
-                            end)
-                            pcall(function()
-                                destination.FluidFidelity = source.FluidFidelity
-                            end)
-                        end
- 
-                        local function copyAttributesAndTags(source, destination)
-                            local ok, attributes = pcall(function()
-                                return source:GetAttributes()
-                            end)
-                            if ok then
-                                for name, value in pairs(attributes) do
-                                    pcall(function()
-                                        destination:SetAttribute(name, value)
-                                    end)
-                                end
-                            end
- 
-                            local tagsOk, tags = pcall(function()
-                                return CollectionService:GetTags(source)
-                            end)
-                            if tagsOk then
-                                for _, tag in ipairs(tags) do
-                                    pcall(function()
-                                        CollectionService:AddTag(destination, tag)
-                                    end)
-                                end
-                            end
-                        end
- 
-                        local function preserveGeometryConnections(source, outputs, primary)
-                            -- Keep joints and WeldConstraints connected to the replacement MeshPart.
-                            -- This version intentionally avoids CalculateConstraintsToPreserve because
-                            -- its recommendation record shape can vary between Studio builds.
-                            local jointsOk, joints = pcall(function()
-                                return source:GetJoints()
-                            end)
-                            if jointsOk and type(joints) == "table" then
-                                for _, joint in ipairs(joints) do
-                                    pcall(function()
-                                        local part0 = joint.Part0
-                                        local part1 = joint.Part1
-                                        if part0 == source then
-                                            joint.Part0 = primary
-                                        end
-                                        if part1 == source then
-                                            joint.Part1 = primary
-                                        end
-                                    end)
-                                end
-                            end
- 
-                            local parent = source.Parent
-                            if parent == nil then
-                                return
-                            end
- 
-                            local descendantsOk, descendants = pcall(function()
-                                return parent:GetDescendants()
-                            end)
-                            if not descendantsOk or type(descendants) ~= "table" then
-                                return
-                            end
- 
-                            for _, item in ipairs(descendants) do
-                                if item:IsA("WeldConstraint") then
-                                    pcall(function()
-                                        local part0 = item.Part0
-                                        local part1 = item.Part1
-                                        if part0 == source then
-                                            item.Part0 = primary
-                                        end
-                                        if part1 == source then
-                                            item.Part1 = primary
-                                        end
-                                    end)
-                                end
-                            end
-                        end
- 
-                        local function moveRemainingChildren(source, primary)
-                            for _, child in ipairs(source:GetChildren()) do
-                                pcall(function()
-                                    child.Parent = primary
-                                end)
-                            end
-                        end
- 
-                        -- Persistent conversion pipeline.
-                        -- The source CSG is parsed directly into an EditableMesh, then uploaded as a real
-                        -- Mesh asset. CreateAssetAsync in local-plugin context defaults to the logged-in
-                        -- Studio user, intentionally avoiding group Create Asset permission failures.
-                        local function buildUserAssetRequest(source)
-                            return {
-                            Name = source.Name .. "_Mesh",
-                            Description = "Mesh generated by SOLVEN STUDIO Union > Mesh V3",
-                            }
-                        end
- 
-                        local function createMeshPartFromAsset(assetId, source)
-                            local persistent = nil
-                            local lastError = nil
-                            for attempt = 1, 10 do
-                                local ok, createdOrError = pcall(function()
-                                    return AssetService:CreateMeshPartAsync(Content.fromAssetId(assetId), {
-                                    CollisionFidelity = source.CollisionFidelity,
-                                    RenderFidelity = source.RenderFidelity,
-                                    FluidFidelity = source.FluidFidelity,
-                                    })
-                                end)
-                                if ok and createdOrError then
-                                    persistent = createdOrError
-                                    break
-                                end
-                                lastError = createdOrError
-                                if attempt < 10 then
-                                    task.wait(math.min(0.3 * attempt, 1.5))
-                                end
-                            end
-                            if not persistent then
-                                return nil, "uploaded mesh could not be loaded: " .. tostring(lastError)
-                            end
-                            persistent:SetAttribute("solvenstudioMeshAssetId", assetId)
-                            return persistent, nil
-                        end
- 
-                        local function uploadEditableAsMesh(editable, source)
-                            local uploadOk, result, assetIdOrError = pcall(function()
-                                return AssetService:CreateAssetAsync(editable, Enum.AssetType.Mesh, buildUserAssetRequest(source))
-                            end)
-                            if not uploadOk then
-                                return nil, "mesh upload call failed: " .. tostring(result)
-                            end
-                            if result ~= Enum.CreateAssetResult.Success then
-                                return nil, "mesh upload failed: " .. tostring(result) .. " / " .. tostring(assetIdOrError)
-                            end
-                            local assetId = tonumber(assetIdOrError)
-                            if not assetId or assetId <= 0 then
-                                return nil, "mesh upload returned an invalid asset id"
-                            end
-                            return createMeshPartFromAsset(assetId, source)
-                        end
- 
-                        local function convertOne(source)
-                            local originalParent = source.Parent
-                            if not originalParent then
-                                return nil, "source has no parent"
-                            end
- 
-                            local solid, solidErr = solidMeshFromPart(source)
-                            if not solid then
-                                return nil, solidErr
-                            end
- 
-                            local useColorData = false
-                            pcall(function()
-                                useColorData = source:IsA("UnionOperation") and not source.UsePartColor
-                            end)
- 
-                            local editable, editableErr = buildEditableFromSolid(solid, useColorData)
-                            if not editable then
-                                return nil, "could not build EditableMesh: " .. tostring(editableErr)
-                            end
- 
-                            setStatus("Uploading persistent mesh asset: " .. source.Name)
-                            local mesh, uploadErr = uploadEditableAsMesh(editable, source)
-                            editable:Destroy()
-                            if not mesh then
-                                return nil, uploadErr
-                            end
- 
-                            copyProperties(source, mesh)
-                            copyAttributesAndTags(source, mesh)
-                            if useColorData then
-                                -- Vertex colors already contain the union colors. White avoids double tinting.
-                                mesh.Color = Color3.new(1, 1, 1)
-                            end
-                            pcall(function() mesh.Size = source.Size end)
-                                pcall(function() mesh.CFrame = source.CFrame end)
- 
-                                    if settings.replaceOriginal then
-                                        mesh.Name = source.Name
-                                    else
-                                        mesh.Name = source.Name .. "_Mesh"
-                                    end
-                                    mesh.Parent = originalParent
- 
-                                    if settings.replaceOriginal then
-                                        if settings.preserveChildren then
-                                            preserveGeometryConnections(source, {mesh}, mesh)
-                                            moveRemainingChildren(source, mesh)
-                                        end
-                                        source:Destroy()
-                                    end
- 
-                                    return {mesh}, nil
-                                end
- 
-                                local function runConversion()
-                                    if busy then return end
-                                    local targets = collectConvertible()
-                                    if #targets == 0 then
-                                        setStatus("No Union/CSG object found. Select a Union or a Model/Folder containing one.", "warn")
-                                        return
-                                    end
- 
-                                    setBusy(true)
-                                    clearResults()
-                                    pcall(function()
-                                        ChangeHistoryService:SetWaypoint("Before Union to Mesh")
-                                    end)
- 
-                                    task.spawn(function()
-                                        local converted = {}
-                                        local failed = 0
-                                        for i, source in ipairs(targets) do
-                                            if source.Parent ~= nil then
-                                                setStatus(string.format("Converting %d/%d: %s", i, #targets, source.Name))
-                                                local outputs, err = convertOne(source)
-                                                if outputs then
-                                                    for _, mesh in ipairs(outputs) do
-                                                        table.insert(converted, mesh)
-                                                    end
-                                                else
-                                                    failed = failed + 1
-                                                    warn("[Union > Mesh] " .. source:GetFullName() .. " failed: " .. tostring(err))
-                                                end
-                                            end
-                                            task.wait()
-                                        end
- 
-                                        if #converted > 0 then
-                                            Selection:Set(converted)
-                                        end
-                                        pcall(function()
-                                            ChangeHistoryService:SetWaypoint("Union to Mesh")
-                                        end)
- 
-                                        refreshSelectionSummary()
-                                        if #converted > 0 then
-                                            local totalFaces, totalVertices, successful = 0, 0, 0
-                                            local displayCount = math.min(#converted, MAX_ANALYZE)
-                                            for i = 1, displayCount do
-                                                local mesh = converted[i]
-                                                setStatus(string.format("Reading poly %d/%d: %s", i, displayCount, mesh.Name))
-                                                local faces, vertices, err = analyzeMesh(mesh)
-                                                if faces and vertices then
-                                                    totalFaces = totalFaces + faces
-                                                    totalVertices = totalVertices + vertices
-                                                    successful = successful + 1
-                                                end
-                                                addResultCard(mesh, faces, vertices, err)
-                                                task.wait()
-                                            end
-                                            metricTriangles.Text = "Triangles: " .. formatInt(totalFaces)
-                                            metricVertices.Text = "Vertices: " .. formatInt(totalVertices)
-                                            if failed == 0 then
-                                                setStatus(string.format("Done. %d CSG object(s) converted to %d MeshPart(s).", #targets, #converted), "good")
-                                            else
-                                                setStatus(string.format("Done with %d failure(s). Check Output for details.", failed), "warn")
-                                            end
-                                        else
-                                            metricTriangles.Text = "Triangles: 0"
-                                            metricVertices.Text = "Vertices: 0"
-                                            setStatus("Conversion failed for every selected CSG object. Check Output.", "bad")
-                                        end
-                                        setBusy(false)
-                                    end)
-                                end
- 
-                                local function hover(button, normalColor, hoverColor)
-                                    button.MouseEnter:Connect(function()
-                                        if not busy then
-                                            button.BackgroundColor3 = hoverColor
-                                        end
-                                    end)
-                                    button.MouseLeave:Connect(function()
-                                        button.BackgroundColor3 = normalColor
-                                    end)
-                                end
-                                hover(analyzeButton, COLORS.panel2, Color3.fromRGB(45, 50, 61))
- 
-                                analyzeButton.MouseButton1Click:Connect(runAnalysis)
-                                convertButton.MouseButton1Click:Connect(runConversion)
- 
-                                Selection.SelectionChanged:Connect(function()
-                                    if not busy then
-                                        refreshSelectionSummary()
-                                    end
-                                end)
- 
-                                widget:GetPropertyChangedSignal("Enabled"):Connect(function()
-                                    toolbarButton:SetActive(widget.Enabled)
-                                    if widget.Enabled then
-                                        refreshSelectionSummary()
-                                    end
-                                end)
- 
-                                toolbarButton.Click:Connect(function()
-                                    widget.Enabled = not widget.Enabled
-                                end)
- 
-                                refreshSelectionSummary()
-                                setStatus("Ready V1.0. Full Get update on discord Solven Studio.")
+        end
+
+        if chunkName == "META" then
+            local chunkReader = Reader.new(chunkData)
+            local count = chunkReader:u32le()
+            for _ = 1, count do
+                chunkReader:string()
+                chunkReader:string()
+            end
+
+        elseif chunkName == "SSTR" then
+            local chunkReader = Reader.new(chunkData)
+            chunkReader:u32le() -- version
+            local count = chunkReader:u32le()
+            for index = 0, count - 1 do
+                chunkReader:skip(16) -- MD5; tidak perlu divalidasi untuk import
+                file.sharedStrings[index] = chunkReader:string()
+            end
+
+        elseif chunkName == "INST" then
+            local chunkReader = Reader.new(chunkData)
+            local classId = chunkReader:u32le()
+            local className = chunkReader:string()
+            local objectFormat = chunkReader:u8()
+            local count = chunkReader:u32le()
+            local refs = chunkReader:referents(count)
+            local group = {
+                id = classId,
+                className = className,
+                count = count,
+                refs = refs,
+                nodes = {},
+            }
+            file.groups[#file.groups + 1] = group
+            file.groupById[classId] = group
+
+            for index, ref in ipairs(refs) do
+                local node = {
+                    ref = ref,
+                    className = className,
+                    index = index,
+                    props = {},
+                    instance = nil,
+                }
+                group.nodes[index] = node
+                file.nodesByRef[ref] = node
+            end
+
+            if objectFormat ~= 0 then
+                chunkReader:skip(count)
+            end
+
+        elseif chunkName == "PROP" then
+            local chunkReader = Reader.new(chunkData)
+            local classId = chunkReader:u32le()
+            local propertyName = chunkReader:string()
+            local typeId = chunkReader:u8()
+            local group = file.groupById[classId]
+            if group == nil then
+                fail("PROP merujuk class ID yang belum dikenal: " .. tostring(classId))
+            end
+            local values = decodePropertyValues(chunkReader, typeId, group.count, file)
+            file.propertyRecords[#file.propertyRecords + 1] = {
+                group = group,
+                name = propertyName,
+                typeId = typeId,
+                values = values,
+            }
+            for index, node in ipairs(group.nodes) do
+                node.props[propertyName] = {
+                    typeId = typeId,
+                    value = values[index],
+                }
+            end
+
+        elseif chunkName == "PRNT" then
+            local chunkReader = Reader.new(chunkData)
+            chunkReader:u8() -- version
+            local count = chunkReader:u32le()
+            local children = chunkReader:referents(count)
+            local parents = chunkReader:referents(count)
+            for i = 1, count do
+                file.parentByRef[children[i]] = parents[i]
+            end
+
+        elseif chunkName == "SIGN" then
+            -- Signature bytecode tidak diperlukan untuk membuat instance.
+
+        elseif chunkName == "END\0" then
+            if chunkData ~= "</roblox>" then
+                fail("END chunk RBXM tidak valid")
+            end
+            break
+
+        else
+            fail("Chunk RBXM tidak dikenal: " .. tostring(chunkName))
+        end
+    end
+
+    local roots = {}
+    for ref, node in pairs(file.nodesByRef) do
+        if file.parentByRef[ref] == nil or file.parentByRef[ref] == -1 then
+            roots[#roots + 1] = node
+        end
+    end
+
+    table.sort(roots, function(a, b)
+        return a.ref < b.ref
+    end)
+    file.roots = roots
+    return file
+end
+
+local function getEnvironment()
+    if type(getgenv) == "function" then
+        local ok, env = pcall(getgenv)
+        if ok and type(env) == "table" then
+            return env
+        end
+    end
+    return _G
+end
+
+local function readLocalFile(path)
+    local environment = getEnvironment()
+    local reader = environment.readfile
+    if type(reader) ~= "function" then
+        reader = readfile
+    end
+    if type(reader) ~= "function" then
+        fail("Executor ini tidak menyediakan readfile(path)")
+    end
+
+    local ok, data = pcall(reader, path)
+    if not ok then
+        fail("readfile gagal: " .. tostring(data))
+    end
+    if type(data) ~= "string" or #data == 0 then
+        fail("File kosong atau readfile tidak mengembalikan binary string")
+    end
+    return data
+end
+
+local function resolveValue(value, instancesByRef)
+    if type(value) ~= "table" then
+        return value
+    end
+    if value.__rbxmReference then
+        return instancesByRef[value.ref]
+    end
+    if value.__rbxmContent then
+        return value.uri
+    end
+    return value
+end
+
+local function enumItemFromNumber(object, propertyName, number)
+    local ok, current = pcall(function()
+        return object[propertyName]
+    end)
+    if not ok or typeof(current) ~= "EnumItem" then
+        return nil
+    end
+
+    local okItems, items = pcall(function()
+        return current.EnumType:GetEnumItems()
+    end)
+    if not okItems then
+        return nil
+    end
+
+    for _, item in ipairs(items) do
+        if item.Value == number then
+            return item
+        end
+    end
+    return nil
+end
+
+local function assignProperty(object, propertyName, rawValue, typeId, instancesByRef)
+    if propertyName == "Parent" then
+        return false
+    end
+
+    if typeId == 0x21
+        or propertyName == "AttributesSerialize"
+        or propertyName == "Capabilities"
+        or propertyName == "DefinesCapabilities"
+        or propertyName == "ModelMeshData"
+        or propertyName == "ModelMeshSize"
+        or propertyName == "ModelMeshCFrame"
+        or propertyName == "WorldPivotData"
+        or propertyName == "SourceAssetId"
+        or propertyName == "SlimHash"
+        or propertyName == "Tags" then
+        -- Read-only/internal serialized fields. Byte data sudah dibaca, tetapi
+        -- assignment-nya akan selalu ditolak oleh runtime biasa.
+        return false
+    end
+
+    if rawValue == nil then
+        return false
+    end
+
+    local value = resolveValue(rawValue, instancesByRef)
+    if value == nil and typeId == 0x13 then
+        return false
+    end
+
+    if type(rawValue) == "table" and rawValue.__rbxmFont then
+        local family = rawValue.family
+        local weight = rawValue.weight
+        local style = rawValue.style
+        local ok, font = pcall(Font.new, family, weight, style)
+        if ok then
+            value = font
+        else
+            return false
+        end
+    end
+
+    local ok = pcall(function()
+        object[propertyName] = value
+    end)
+    if ok then
+        return true
+    end
+
+    -- Enum properties disimpan sebagai token angka di RBXM.
+    if type(value) == "number" then
+        local item = enumItemFromNumber(object, propertyName, value)
+        if item ~= nil then
+            return pcall(function()
+                object[propertyName] = item
+            end)
+        end
+    end
+
+    -- Content modern kadang membutuhkan Content.fromUri(), sedangkan property
+    -- lama menerima string biasa.
+    if type(rawValue) == "table" and rawValue.__rbxmContent
+        and type(Content) == "table" and type(Content.fromUri) == "function" then
+        local okContent, contentValue = pcall(Content.fromUri, rawValue.uri)
+        if okContent then
+            return pcall(function()
+                object[propertyName] = contentValue
+            end)
+        end
+    end
+
+    return false
+end
+
+local function createImportedInstance(node, failedClasses)
+    local ok, object = pcall(Instance.new, node.className)
+    if not ok or object == nil then
+        object = Instance.new("Folder")
+        failedClasses[node.className] = (failedClasses[node.className] or 0) + 1
+        pcall(function()
+            object:SetAttribute(ORIGINAL_CLASS_ATTRIBUTE, node.className)
+        end)
+    end
+    node.instance = object
+    return object
+end
+
+local function importDecodedFile(file)
+    local instancesByRef = {}
+    local failedClasses = {}
+    local createdCount = 0
+    local failedProperties = 0
+
+    -- Buat semua instance lebih dulu agar referensi ObjectValue/PrimaryPart
+    -- dapat diselesaikan setelah seluruh class sudah tersedia.
+    for ref, node in pairs(file.nodesByRef) do
+        local object = createImportedInstance(node, failedClasses)
+        instancesByRef[ref] = object
+        createdCount = createdCount + 1
+    end
+
+    -- Isi properties sebelum Parent dipasang.
+    for _, node in pairs(file.nodesByRef) do
+        local propertyNames = {}
+        for name in pairs(node.props) do
+            propertyNames[#propertyNames + 1] = name
+        end
+        table.sort(propertyNames, function(a, b)
+            if a == "Name" then
+                return true
+            elseif b == "Name" then
+                return false
+            end
+            return a < b
+        end)
+
+        for _, propertyName in ipairs(propertyNames) do
+            local property = node.props[propertyName]
+            if not assignProperty(
+                node.instance,
+                propertyName,
+                property.value,
+                property.typeId,
+                instancesByRef
+            ) then
+                failedProperties = failedProperties + 1
+            end
+        end
+
+        if DISABLE_IMPORTED_SCRIPTS
+            and (node.className == "Script"
+                or node.className == "LocalScript"
+                or node.className == "ModuleScript") then
+            pcall(function()
+                node.instance.Disabled = true
+            end)
+        end
+    end
+
+    -- Parent sesuai PRNT. Root langsung ke Workspace.
+    for ref, node in pairs(file.nodesByRef) do
+        local parentRef = file.parentByRef[ref]
+        local parentObject = parentRef and instancesByRef[parentRef] or nil
+        if parentObject ~= nil then
+            pcall(function()
+                node.instance.Parent = parentObject
+            end)
+        else
+            pcall(function()
+                node.instance.Parent = Workspace
+            end)
+        end
+    end
+
+    local failedClassCount = 0
+    for _ in pairs(failedClasses) do
+        failedClassCount = failedClassCount + 1
+    end
+
+    return createdCount, failedProperties, failedClassCount
+end
+
+local importing = false
+
+local function importPath(path)
+    if path == nil or path:gsub("%s+", "") == "" then
+        fail("Masukkan path file .rbxm terlebih dahulu")
+    end
+
+    setStatus("Membaca file...", Color3.fromRGB(220, 220, 150))
+    local data = readLocalFile(path)
+    setStatus("Menganalisis RBXM...", Color3.fromRGB(220, 220, 150))
+    local file = decodeRbxm(data)
+    setStatus("Membuat instance...", Color3.fromRGB(220, 220, 150))
+    local created, failedProperties, failedClasses = importDecodedFile(file)
+
+    local message = string.format(
+        "Selesai: %d instance dibuat, %d property dilewati.",
+        created,
+        failedProperties
+    )
+    if failedClasses > 0 then
+        message = message .. " " .. tostring(failedClasses) .. " class dibuat sebagai Folder pengganti."
+    end
+    if DISABLE_IMPORTED_SCRIPTS then
+        message = message .. " Script di-disable."
+    end
+    setStatus(message, Color3.fromRGB(130, 230, 160))
+end
+
+importButton.MouseButton1Click:Connect(function()
+    if importing then
+        return
+    end
+    importing = true
+    importButton.Active = false
+    importButton.AutoButtonColor = false
+
+    task.spawn(function()
+        local ok, err = pcall(function()
+            importPath(pathBox.Text)
+        end)
+        if not ok then
+            setStatus("ERROR ASLI: " .. tostring(err), Color3.fromRGB(255, 125, 125))
+        end
+        importButton.Active = true
+        importButton.AutoButtonColor = true
+        importing = false
+    end)
+end)
+
+-- Satu status startup ditampilkan di panel, tanpa spam Output.
+setStatus("Siap. Masukkan path .rbxm lalu tekan Import RBXM.")
