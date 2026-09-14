@@ -253,26 +253,51 @@ backdrop.Parent = screenGui
 
 local app = Instance.new("Frame")
 app.Name = "AssetHub"
-app.Size = UDim2.new(0.91, 0, 0.82, 0)
+app.Size = UDim2.new(0.70, 0, 0.40, 0)
 app.Position = UDim2.new(0.5, 0, 0.5, 0)
 app.AnchorPoint = Vector2.new(0.5, 0.5)
 app.BackgroundColor3 = C.panel
 app.BorderSizePixel = 0
 app.Visible = false
 app.Parent = backdrop
+
+-- Floating button untuk membuka/menutup panel tanpa menghancurkan UI.
+local toggleButton = Instance.new("TextButton")
+toggleButton.Name = "Toggle"
+toggleButton.BackgroundColor3 = C.card2
+toggleButton.BorderSizePixel = 0
+toggleButton.Position = UDim2.new(0, 12, 0.5, -22)
+toggleButton.Size = UDim2.new(0, 44, 0, 44)
+toggleButton.Font = Enum.Font.GothamBold
+toggleButton.TextSize = 16
+toggleButton.TextColor3 = C.purpleHover
+toggleButton.Text = "R"
+toggleButton.AutoButtonColor = false
+toggleButton.Visible = false
+toggleButton.ZIndex = 200
+toggleButton.Parent = screenGui
+corner(toggleButton, 13)
+stroke(toggleButton, C.purple2, 0.1, 1)
+addHover(toggleButton, C.card2, C.card)
+
+toggleButton.MouseButton1Click:Connect(function()
+    app.Visible = not app.Visible
+    backdrop.Visible = app.Visible
+end)
+
 corner(app, 14)
 stroke(app, C.line, 0.18, 1)
 
 local appConstraint = Instance.new("UISizeConstraint")
-appConstraint.MinSize = Vector2.new(540, 390)
-appConstraint.MaxSize = Vector2.new(960, 650)
+appConstraint.MinSize = Vector2.new(320, 260)
+appConstraint.MaxSize = Vector2.new(500, 340)
 appConstraint.Parent = app
 
 local sidebar = Instance.new("Frame")
 sidebar.Name = "Sidebar"
 sidebar.BackgroundColor3 = C.sidebar
 sidebar.BorderSizePixel = 0
-sidebar.Size = UDim2.new(0, 218, 1, 0)
+sidebar.Size = UDim2.new(0, 140, 1, 0)
 sidebar.Parent = app
 corner(sidebar, 14)
 
@@ -286,31 +311,31 @@ sidebarMask.Parent = sidebar
 local brandIcon = Instance.new("TextLabel")
 brandIcon.BackgroundColor3 = C.card2
 brandIcon.BorderSizePixel = 0
-brandIcon.Position = UDim2.new(0, 20, 0, 18)
-brandIcon.Size = UDim2.new(0, 42, 0, 42)
+brandIcon.Position = UDim2.new(0, 14, 0, 14)
+brandIcon.Size = UDim2.new(0, 34, 0, 34)
 brandIcon.Font = Enum.Font.GothamBold
-brandIcon.TextSize = 18
+brandIcon.TextSize = 15
 brandIcon.TextColor3 = C.purpleHover
 brandIcon.Text = "R"
 brandIcon.Parent = sidebar
 corner(brandIcon, 12)
 stroke(brandIcon, C.purple2, 0.15, 1)
 
-local brandTitle = label(sidebar, "RBXM Asset Hub", UDim2.new(0, 73, 0, 19), UDim2.new(1, -85, 0, 20), Enum.Font.GothamBold, 13, C.text)
-local brandVersion = label(sidebar, "Studio Lite  •  Native", UDim2.new(0, 73, 0, 39), UDim2.new(1, -85, 0, 16), Enum.Font.Gotham, 9, C.muted)
+local brandTitle = label(sidebar, "ASSET HUB", UDim2.new(0, 56, 0, 14), UDim2.new(1, -62, 0, 17), Enum.Font.GothamBold, 10, C.text)
+local brandVersion = label(sidebar, "RBXM  •  NATIVE", UDim2.new(0, 56, 0, 31), UDim2.new(1, -62, 0, 12), Enum.Font.Gotham, 7, C.muted)
 
 local sideLine = Instance.new("Frame")
 sideLine.BackgroundColor3 = C.line
 sideLine.BackgroundTransparency = 0.55
 sideLine.BorderSizePixel = 0
-sideLine.Position = UDim2.new(0, 20, 0, 80)
-sideLine.Size = UDim2.new(1, -40, 0, 1)
+sideLine.Position = UDim2.new(0, 14, 0, 62)
+sideLine.Size = UDim2.new(1, -28, 0, 1)
 sideLine.Parent = sidebar
 
 local navHolder = Instance.new("Frame")
 navHolder.BackgroundTransparency = 1
-navHolder.Position = UDim2.new(0, 12, 0, 101)
-navHolder.Size = UDim2.new(1, -24, 0, 140)
+navHolder.Position = UDim2.new(0, 8, 0, 78)
+navHolder.Size = UDim2.new(1, -16, 0, 122)
 navHolder.Parent = sidebar
 
 local navLayout = Instance.new("UIListLayout")
@@ -371,46 +396,48 @@ local quickLine = Instance.new("Frame")
 quickLine.BackgroundColor3 = C.line
 quickLine.BackgroundTransparency = 0.55
 quickLine.BorderSizePixel = 0
-quickLine.Position = UDim2.new(0, 20, 1, -145)
-quickLine.Size = UDim2.new(1, -40, 0, 1)
+quickLine.Position = UDim2.new(0, 14, 1, -112)
+quickLine.Size = UDim2.new(1, -28, 0, 1)
 quickLine.Parent = sidebar
 
-local quickLabel = label(sidebar, "QUICK TOOLS", UDim2.new(0, 20, 1, -126), UDim2.new(1, -40, 0, 18), Enum.Font.GothamBold, 9, C.dim)
+local quickLabel = label(sidebar, "TOOLS", UDim2.new(0, 14, 1, -96), UDim2.new(1, -28, 0, 16), Enum.Font.GothamBold, 8, C.dim)
 
-local rescanButton = button(sidebar, "↻    Rescan Assets", UDim2.new(0, 20, 1, -91), UDim2.new(1, -40, 0, 38), C.card, 10)
+local rescanButton = button(sidebar, "↻  RESCAN", UDim2.new(0, 14, 1, -69), UDim2.new(1, -28, 0, 32), C.card, 8)
 rescanButton.TextXAlignment = Enum.TextXAlignment.Left
 local rescanPadding = Instance.new("UIPadding")
-rescanPadding.PaddingLeft = UDim.new(0, 14)
+rescanPadding.PaddingLeft = UDim.new(0, 8)
 rescanPadding.Parent = rescanButton
 addHover(rescanButton, C.card, C.card2)
 
-local sideHint = label(sidebar, "Native import keeps original\nmodel data intact.", UDim2.new(0, 20, 1, -43), UDim2.new(1, -40, 0, 34), Enum.Font.Gotham, 9, C.dim)
+local sideHint = label(sidebar, "NATIVE\nIMPORT", UDim2.new(0, 14, 1, -34), UDim2.new(1, -28, 0, 24), Enum.Font.Gotham, 7, C.dim)
 sideHint.TextWrapped = true
 
 local content = Instance.new("Frame")
 content.Name = "Content"
 content.BackgroundTransparency = 1
-content.Position = UDim2.new(0, 218, 0, 0)
-content.Size = UDim2.new(1, -218, 1, 0)
+content.Position = UDim2.new(0, 140, 0, 0)
+content.Size = UDim2.new(1, -140, 1, 0)
 content.Parent = app
 
 local contentHeader = Instance.new("Frame")
 contentHeader.BackgroundTransparency = 1
-contentHeader.Position = UDim2.new(0, 28, 0, 20)
-contentHeader.Size = UDim2.new(1, -56, 0, 32)
+contentHeader.Position = UDim2.new(0, 14, 0, 12)
+contentHeader.Size = UDim2.new(1, -28, 0, 28)
 contentHeader.Parent = content
 
-local pageTitle = label(contentHeader, "Dashboard", UDim2.new(0, 0, 0, 0), UDim2.new(1, -60, 0, 22), Enum.Font.GothamBold, 19, C.text)
-local pageSubTitle = label(contentHeader, "Manage your local Roblox assets seamlessly.", UDim2.new(0, 0, 0, 22), UDim2.new(1, -40, 0, 14), Enum.Font.Gotham, 10, C.muted)
+local pageTitle = label(contentHeader, "Dashboard", UDim2.new(0, 0, 0, 0), UDim2.new(1, -48, 0, 20), Enum.Font.GothamBold, 15, C.text)
+local pageSubTitle = label(contentHeader, "Manage local RBXM assets.", UDim2.new(0, 0, 0, 19), UDim2.new(1, -40, 0, 12), Enum.Font.Gotham, 8, C.muted)
 
 local closeButton = button(contentHeader, "×", UDim2.new(1, -31, 0, 0), UDim2.new(0, 30, 0, 30), C.card, 16)
 closeButton.TextColor3 = C.muted
 addHover(closeButton, C.card, Color3.fromRGB(75, 44, 64))
 closeButton.MouseButton1Click:Connect(function()
-    screenGui:Destroy()
+    app.Visible = false
+    backdrop.Visible = false
+    toggleButton.Visible = true
 end)
 
-local footerStatus = label(content, "Ready.", UDim2.new(0, 28, 1, -28), UDim2.new(1, -56, 0, 16), Enum.Font.Gotham, 9, C.muted)
+local footerStatus = label(content, "Ready.", UDim2.new(0, 14, 1, -20), UDim2.new(1, -28, 0, 14), Enum.Font.Gotham, 8, C.muted)
 footerStatus.TextTruncate = Enum.TextTruncate.AtEnd
 
 local function setStatus(text, color)
@@ -424,52 +451,52 @@ end
 local overviewPage = Instance.new("Frame")
 overviewPage.Name = "OverviewPage"
 overviewPage.BackgroundTransparency = 1
-overviewPage.Position = UDim2.new(0, 28, 0, 83)
-overviewPage.Size = UDim2.new(1, -56, 1, -124)
+overviewPage.Position = UDim2.new(0, 14, 0, 62)
+overviewPage.Size = UDim2.new(1, -28, 1, -92)
 overviewPage.Parent = content
 pages.Overview = overviewPage
 
 local totalCard = Instance.new("Frame")
 totalCard.BackgroundColor3 = C.card
 totalCard.BorderSizePixel = 0
-totalCard.Size = UDim2.new(0.5, -7, 0, 82)
+totalCard.Size = UDim2.new(0.5, -5, 0, 58)
 totalCard.Parent = overviewPage
 corner(totalCard, 11)
 stroke(totalCard, C.line, 0.45, 1)
-local totalNumber = label(totalCard, "0", UDim2.new(0, 18, 0, 13), UDim2.new(1, -36, 0, 28), Enum.Font.GothamBold, 24, C.text)
-local totalCaption = label(totalCard, "TOTAL ASSETS", UDim2.new(0, 18, 0, 49), UDim2.new(1, -36, 0, 16), Enum.Font.Gotham, 9, C.muted)
+local totalNumber = label(totalCard, "0", UDim2.new(0, 12, 0, 7), UDim2.new(1, -24, 0, 22), Enum.Font.GothamBold, 18, C.text)
+local totalCaption = label(totalCard, "TOTAL ASSETS", UDim2.new(0, 12, 0, 35), UDim2.new(1, -24, 0, 13), Enum.Font.Gotham, 7, C.muted)
 
 local typeCard = Instance.new("Frame")
 typeCard.BackgroundColor3 = C.card
 typeCard.BorderSizePixel = 0
-typeCard.Position = UDim2.new(0.5, 7, 0, 0)
-typeCard.Size = UDim2.new(0.5, -7, 0, 82)
+typeCard.Position = UDim2.new(0.5, 5, 0, 0)
+typeCard.Size = UDim2.new(0.5, -5, 0, 58)
 typeCard.Parent = overviewPage
 corner(typeCard, 11)
 stroke(typeCard, C.line, 0.45, 1)
-local rbxmNumber = label(typeCard, "0", UDim2.new(0, 18, 0, 13), UDim2.new(1, -36, 0, 28), Enum.Font.GothamBold, 24, C.text)
-local rbxmCaption = label(typeCard, "RBXM FILES", UDim2.new(0, 18, 0, 49), UDim2.new(1, -36, 0, 16), Enum.Font.Gotham, 9, C.muted)
+local rbxmNumber = label(typeCard, "0", UDim2.new(0, 12, 0, 7), UDim2.new(1, -24, 0, 22), Enum.Font.GothamBold, 18, C.text)
+local rbxmCaption = label(typeCard, "RBXM FILES", UDim2.new(0, 12, 0, 35), UDim2.new(1, -24, 0, 13), Enum.Font.Gotham, 7, C.muted)
 
 local welcomeCard = Instance.new("Frame")
 welcomeCard.BackgroundColor3 = C.card
 welcomeCard.BorderSizePixel = 0
-welcomeCard.Position = UDim2.new(0, 0, 0, 101)
-welcomeCard.Size = UDim2.new(1, 0, 0, 138)
+welcomeCard.Position = UDim2.new(0, 0, 0, 70)
+welcomeCard.Size = UDim2.new(1, 0, 0, 88)
 welcomeCard.Parent = overviewPage
 corner(welcomeCard, 11)
 stroke(welcomeCard, C.line, 0.55, 1)
-local welcomeTitle = label(welcomeCard, "Native asset workflow", UDim2.new(0, 18, 0, 18), UDim2.new(1, -36, 0, 22), Enum.Font.GothamBold, 14, C.text)
-local welcomeText = label(welcomeCard, "Scan folder untuk menemukan model lokal. Saat di-import, file langsung diproses oleh Roblox sehingga ukuran dan isi model tidak dihitung ulang oleh panel ini.", UDim2.new(0, 18, 0, 48), UDim2.new(1, -36, 0, 45), Enum.Font.Gotham, 10, C.muted)
+local welcomeTitle = label(welcomeCard, "Native asset workflow", UDim2.new(0, 12, 0, 10), UDim2.new(1, -24, 0, 17), Enum.Font.GothamBold, 11, C.text)
+local welcomeText = label(welcomeCard, "Scan folder lalu import dengan native loader Roblox.", UDim2.new(0, 12, 0, 31), UDim2.new(1, -24, 0, 16), Enum.Font.Gotham, 8, C.muted)
 welcomeText.TextWrapped = true
 
-local openAssetsButton = button(welcomeCard, "OPEN ASSETS", UDim2.new(0, 18, 1, -39), UDim2.new(0, 126, 0, 28), C.purple2, 9)
+local openAssetsButton = button(welcomeCard, "OPEN ASSETS", UDim2.new(0, 12, 1, -29), UDim2.new(0, 104, 0, 22), C.purple2, 8)
 addHover(openAssetsButton, C.purple2, C.purple)
 
-local overviewNote = label(overviewPage, "Quick tools", UDim2.new(0, 0, 0, 258), UDim2.new(1, -4, 0, 18), Enum.Font.GothamBold, 11, C.text)
-local overviewRescan = button(overviewPage, "↻   Rescan local assets", UDim2.new(0, 0, 0, 284), UDim2.new(1, -4, 0, 40), C.card2, 10)
+local overviewNote = label(overviewPage, "Quick tools", UDim2.new(0, 0, 0, 169), UDim2.new(1, -4, 0, 16), Enum.Font.GothamBold, 9, C.text)
+local overviewRescan = button(overviewPage, "↻   Rescan local assets", UDim2.new(0, 0, 0, 190), UDim2.new(1, -4, 0, 30), C.card2, 8)
 overviewRescan.TextXAlignment = Enum.TextXAlignment.Left
 local overviewPadding = Instance.new("UIPadding")
-overviewPadding.PaddingLeft = UDim.new(0, 14)
+overviewPadding.PaddingLeft = UDim.new(0, 10)
 overviewPadding.Parent = overviewRescan
 addHover(overviewRescan, C.card2, C.input)
 
@@ -479,8 +506,8 @@ addHover(overviewRescan, C.card2, C.input)
 local assetsPage = Instance.new("Frame")
 assetsPage.Name = "AssetsPage"
 assetsPage.BackgroundTransparency = 1
-assetsPage.Position = UDim2.new(0, 28, 0, 79)
-assetsPage.Size = UDim2.new(1, -56, 1, -120)
+assetsPage.Position = UDim2.new(0, 14, 0, 62)
+assetsPage.Size = UDim2.new(1, -28, 1, -92)
 assetsPage.Visible = false
 assetsPage.Parent = content
 pages.Assets = assetsPage
@@ -489,7 +516,31 @@ local assetsTopLine = Instance.new("Frame")
 assetsTopLine.BackgroundTransparency = 1
 assetsTopLine.Size = UDim2.new(1, 0, 0, 34)
 assetsTopLine.Parent = assetsPage
-local assetsDescription = label(assetsTopLine, "Scan and import local RBXM files.", UDim2.new(0, 0, 0, 0), UDim2.new(0.5, 0, 1, 0), Enum.Font.Gotham, 10, C.muted)
+local assetsDescription = label(assetsTopLine, "Scan and import local RBXM files.", UDim2.new(0, 0, 0, 0), UDim2.new(0.5, 0, 1, 0), Enum.Font.Gotham, 8, C.muted)
+
+local folderBox = Instance.new("TextBox")
+folderBox.Name = "FolderPath"
+folderBox.Position = UDim2.new(0, 0, 0, 31)
+folderBox.Size = UDim2.new(0.72, -4, 0, 27)
+folderBox.BackgroundColor3 = C.input
+folderBox.BorderSizePixel = 0
+folderBox.ClearTextOnFocus = false
+folderBox.Font = Enum.Font.Code
+folderBox.TextSize = 8
+folderBox.TextColor3 = C.text
+folderBox.PlaceholderColor3 = C.muted
+folderBox.PlaceholderText = "Folder path..."
+folderBox.Text = "."
+folderBox.TextXAlignment = Enum.TextXAlignment.Left
+folderBox.Parent = assetsPage
+corner(folderBox, 6)
+local folderPadding = Instance.new("UIPadding")
+folderPadding.PaddingLeft = UDim.new(0, 8)
+folderPadding.PaddingRight = UDim.new(0, 8)
+folderPadding.Parent = folderBox
+
+local scanPageButton = button(assetsPage, "SCAN", UDim2.new(0.72, 3, 0, 31), UDim2.new(0.28, -3, 0, 27), C.purple2, 8)
+addHover(scanPageButton, C.purple2, C.purple)
 
 local assetSearch = Instance.new("TextBox")
 assetSearch.Position = UDim2.new(0.5, 0, 0, 0)
@@ -514,7 +565,7 @@ assetSearchPadding.Parent = assetSearch
 local filterBar = Instance.new("Frame")
 filterBar.BackgroundColor3 = C.input
 filterBar.BorderSizePixel = 0
-filterBar.Position = UDim2.new(0, 0, 0, 44)
+filterBar.Position = UDim2.new(0, 0, 0, 65)
 filterBar.Size = UDim2.new(1, 0, 0, 34)
 filterBar.Parent = assetsPage
 corner(filterBar, 17)
@@ -535,8 +586,8 @@ makeFilter("RBXL", "RBXL", UDim2.new(0.666, 0, 0, 2), UDim2.new(0.333, -3, 1, -4
 local assetList = Instance.new("ScrollingFrame")
 assetList.BackgroundColor3 = C.card
 assetList.BorderSizePixel = 0
-assetList.Position = UDim2.new(0, 0, 0, 91)
-assetList.Size = UDim2.new(1, 0, 1, -91)
+assetList.Position = UDim2.new(0, 0, 0, 106)
+assetList.Size = UDim2.new(1, 0, 1, -106)
 assetList.ScrollBarThickness = 4
 assetList.ScrollBarImageColor3 = C.line
 assetList.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -564,8 +615,8 @@ assetEmpty.TextYAlignment = Enum.TextYAlignment.Center
 local settingsPage = Instance.new("Frame")
 settingsPage.Name = "SettingsPage"
 settingsPage.BackgroundTransparency = 1
-settingsPage.Position = UDim2.new(0, 28, 0, 79)
-settingsPage.Size = UDim2.new(1, -56, 1, -120)
+settingsPage.Position = UDim2.new(0, 14, 0, 62)
+settingsPage.Size = UDim2.new(1, -28, 1, -92)
 settingsPage.Visible = false
 settingsPage.Parent = content
 pages.Settings = settingsPage
@@ -821,6 +872,8 @@ local function rescan()
     end)
 end
 
+scanPageButton.MouseButton1Click:Connect(rescan)
+
 rescanButton.MouseButton1Click:Connect(function()
     setActivePage("Assets")
     rescan()
@@ -930,5 +983,7 @@ task.spawn(function()
     end
     task.wait(0.18)
     app.Visible = true
+    backdrop.Visible = true
+    toggleButton.Visible = true
     splash.Visible = false
 end)
