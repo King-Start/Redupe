@@ -1,8 +1,8 @@
 -- ============================================================
--- Gabung Part v3.8 (CSG panel + PARTTOMESH companion)
+-- Gabung Part v3.9 (CSG runtime non-destruktif)
 -- Hasil Gabung/Lubangi diletakkan langsung di Workspace.
--- PARTTOMESH.rbxmx tetap berjalan sebagai tool terpisah untuk
--- Part -> MeshPart; panel ini menangani Union dan Subtract.
+-- Part sumber hanya disembunyikan secara lokal saat Play, TIDAK dihapus.
+-- PARTTOMESH.rbxmx tetap berjalan sebagai tool terpisah untuk Part -> MeshPart.
 -- Buat scripting bawaan Studio Lite.
 -- ============================================================
 
@@ -64,7 +64,7 @@ title.Font = Enum.Font.GothamBold
 title.TextSize = 15
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.TextXAlignment = Enum.TextXAlignment.Left
-title.Text = "🔧 Gabung Part v3.8"
+title.Text = "🔧 Gabung Part v3.9"
 title.Active = true
 title.Parent = panel
 
@@ -256,6 +256,30 @@ local tandai = {}
 local milih = false
 local spawnList = {}
 local sibuk = false
+local runtimeTersembunyi = {}
+
+local function sembunyikanRuntime(o)
+    if o == nil or o.Parent == nil then return end
+    pcall(function()
+        o.LocalTransparencyModifier = 1
+        runtimeTersembunyi[o] = true
+    end)
+end
+
+local function tampilkanRuntime(o)
+    if o == nil then return end
+    pcall(function() o.LocalTransparencyModifier = 0 end)
+    runtimeTersembunyi[o] = nil
+end
+
+local function tampilkanSemuaSumber()
+    for o, _ in pairs(runtimeTersembunyi) do
+        if o ~= nil and o.Parent ~= nil then
+            tampilkanRuntime(o)
+        end
+    end
+    runtimeTersembunyi = {}
+end
 
 local function status(t)
     statusLabel.Text = t
@@ -428,14 +452,14 @@ local function gabung()
         u.Parent = Workspace
     end
     for _, o in pairs(valid) do
-        pcall(function() o:Destroy() end)
+        sembunyikanRuntime(o)
     end
     sibuk = false
     reset()
     for _, u in pairs(hasilArr) do
         tambah(u)
     end
-    status(#valid .. " part jadi " .. #hasilArr .. " " .. daftarKelas(hasilArr) .. ".")
+    status(#valid .. " part jadi " .. #hasilArr .. " " .. daftarKelas(hasilArr) .. "; sumber aman.")
 end
 
 -- ============================================================
@@ -648,14 +672,14 @@ local function lubangi()
         u.Parent = Workspace
     end
     for _, o in pairs(valid) do
-        pcall(function() o:Destroy() end)
+        sembunyikanRuntime(o)
     end
     sibuk = false
     reset()
     for _, u in pairs(hasilArr) do
         tambah(u)
     end
-    status(namaMain .. " bolong: " .. daftarKelas(hasilArr) .. ".")
+    status(namaMain .. " bolong: " .. daftarKelas(hasilArr) .. "; sumber aman.")
 end
 
 -- ===== EVENT =====
@@ -795,6 +819,6 @@ local function bersihkanCangkangLama()
     end
 end
 
-print("[Gabung] Panel v3.8 jalan!")
+print("[Gabung] Panel v3.9 jalan!")
 bersihkanTemplateLama()
 bersihkanCangkangLama()
