@@ -1,8 +1,8 @@
 --[[ ============================================================
      SADVZE X CUTE — PREMIUM IMPORTER
-     Tahap 1: SPLASH SCREEN (loading)
+     Tahap 1: SPLASH SCREEN
      Tahap 2: MAIN UI (sidebar + profile panel)
-     Logika load: ALLZ (works di Delta)
+     Logika load: ALLZ
      Warna: Merah x Hitam
      ============================================================ ]]
 
@@ -68,7 +68,7 @@ local function applyRedBorder(target, thickness)
     end)
 end
 
--- ============ PROCESS PARTS (ALLZ) ============
+-- ============ PROCESS PARTS ============
 local function processModelParts(inst)
     if not inst then return end
     local function isRestricted(obj)
@@ -104,7 +104,7 @@ local function refreshScripts(model)
     end)
 end
 
--- ============ LOAD MODEL (ALLZ) ============
+-- ============ LOAD MODEL ============
 local function loadModelFile(filePath)
     local toInsert = {}
     local okGet, res = pcall(function()
@@ -128,7 +128,7 @@ local function loadModelFile(filePath)
     return toInsert
 end
 
--- ============ ROOT GUI ============
+-- ============ ROOT ============
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "SadvzeCuteImporter"
 screenGui.ResetOnSpawn = false
@@ -146,17 +146,17 @@ if not okParent or not screenGui.Parent then
 end
 
 -- ============================================================
--- TAHAP 1: SPLASH SCREEN
+-- TAHAP 1: SPLASH
 -- ============================================================
 local splash = Instance.new("Frame")
 splash.Name = "Splash"
-splash.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-splash.Size = UDim2.new(0, 340, 0, 240)
-splash.Position = UDim2.new(0.5, -170, 0.5, -120)
+splash.BackgroundColor3 = Color3.fromRGB(5, 5, 8)
+splash.Size = UDim2.new(0, 320, 0, 230)
+splash.Position = UDim2.new(0.5, -160, 0.5, -115)
 splash.ZIndex = 100
 splash.Active = true
 splash.Parent = screenGui
-corner(splash, 18)
+corner(splash, 16)
 
 local splashStroke = Instance.new("UIStroke")
 splashStroke.Thickness = 1.5
@@ -167,37 +167,35 @@ applyRedBorder(splashStroke)
 -- Logo
 local splashLogo = Instance.new("Frame")
 splashLogo.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
-splashLogo.Size = UDim2.new(0, 54, 0, 54)
-splashLogo.Position = UDim2.new(0.5, -27, 0, 24)
+splashLogo.Size = UDim2.new(0, 48, 0, 48)
+splashLogo.Position = UDim2.new(0.5, -24, 0, 22)
 splashLogo.ZIndex = 101
 splashLogo.Parent = splash
-corner(splashLogo, 14)
+corner(splashLogo, 12)
 local slStroke = Instance.new("UIStroke")
 slStroke.Color = COLOR_ACCENT
 slStroke.Thickness = 1.5
 slStroke.Transparency = 0.3
 slStroke.Parent = splashLogo
 makeLabel(splashLogo, "sxc", UDim2.new(1,0,1,0), UDim2.new(0,0,0,0),
-    COLOR_ACCENT_H, Enum.Font.GothamBlack, 15, Enum.TextXAlignment.Center).ZIndex = 102
+    COLOR_ACCENT_H, Enum.Font.GothamBlack, 14, Enum.TextXAlignment.Center).ZIndex = 102
 
 -- Judul
 makeLabel(splash, "sadvze x cute", UDim2.new(1,0,0,22),
-    UDim2.new(0,0,0,90), COLOR_TEXT, Enum.Font.GothamBlack, 18, Enum.TextXAlignment.Center).ZIndex = 101
+    UDim2.new(0,0,0,78), COLOR_TEXT, Enum.Font.GothamBlack, 17, Enum.TextXAlignment.Center).ZIndex = 101
 
--- Subtitle
 makeLabel(splash, "ADVANCED ASSET MANAGEMENT", UDim2.new(1,0,0,12),
-    UDim2.new(0,0,0,114), COLOR_MUTED, Enum.Font.Gotham, 8, Enum.TextXAlignment.Center).ZIndex = 101
+    UDim2.new(0,0,0,102), COLOR_MUTED, Enum.Font.Gotham, 8, Enum.TextXAlignment.Center).ZIndex = 101
 
--- Status
 local splashStatus = makeLabel(splash, "PARSING WORKSPACE ASSETS...", UDim2.new(1,0,0,12),
-    UDim2.new(0,0,0,142), COLOR_ACCENT_H, Enum.Font.GothamBold, 9, Enum.TextXAlignment.Center)
+    UDim2.new(0,0,0,130), COLOR_ACCENT_H, Enum.Font.GothamBold, 9, Enum.TextXAlignment.Center)
 splashStatus.ZIndex = 101
 
 -- Progress bar
 local splashBarBg = Instance.new("Frame")
-splashBarBg.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+splashBarBg.BackgroundColor3 = Color3.fromRGB(28, 28, 36)
 splashBarBg.Size = UDim2.new(1, -48, 0, 7)
-splashBarBg.Position = UDim2.new(0, 24, 0, 164)
+splashBarBg.Position = UDim2.new(0, 24, 0, 152)
 splashBarBg.ZIndex = 101
 splashBarBg.Parent = splash
 corner(splashBarBg, 4)
@@ -216,16 +214,16 @@ sbGrad.Color = ColorSequence.new({
 sbGrad.Parent = splashBarFill
 
 local splashPercent = makeLabel(splash, "0%", UDim2.new(0.5,0,0,12),
-    UDim2.new(0, 24, 0, 178), COLOR_MUTED, Enum.Font.GothamBold, 9)
+    UDim2.new(0, 24, 0, 166), COLOR_MUTED, Enum.Font.GothamBold, 9)
 
 local splashVersion = makeLabel(splash, "v1.0 PRO", UDim2.new(0.5,-24,0,12),
-    UDim2.new(0.5,0,0,178), COLOR_MUTED, Enum.Font.GothamBold, 9, Enum.TextXAlignment.Right)
+    UDim2.new(0.5,0,0,166), COLOR_MUTED, Enum.Font.GothamBold, 9, Enum.TextXAlignment.Right)
 
--- Tab nav bawah
+-- Tab nav
 local splashTabs = Instance.new("Frame")
 splashTabs.BackgroundTransparency = 1
 splashTabs.Size = UDim2.new(1, -48, 0, 20)
-splashTabs.Position = UDim2.new(0, 24, 0, 202)
+splashTabs.Position = UDim2.new(0, 24, 0, 194)
 splashTabs.ZIndex = 101
 splashTabs.Parent = splash
 
@@ -243,8 +241,8 @@ local function makeSplashTab(text, posX)
     return {dot = dot, lbl = lbl}
 end
 
-local sTab1 = makeSplashTab("CORE", 20)
-local sTab2 = makeSplashTab("PARSER", 110)
+local sTab1 = makeSplashTab("CORE", 10)
+local sTab2 = makeSplashTab("PARSER", 105)
 local sTab3 = makeSplashTab("IMPORTER", 200)
 
 local function setSplashProgress(p)
@@ -252,17 +250,14 @@ local function setSplashProgress(p)
     splashBarFill.Size = UDim2.new(p, 0, 1, 0)
     splashPercent.Text = math.floor(p * 100) .. "%"
 
-    -- Highlight tab berdasarkan progress
     local map = {
-        {tab = sTab1, threshold = 0.33},
-        {tab = sTab2, threshold = 0.66},
-        {tab = sTab3, threshold = 1.0},
+        {tab = sTab1, from = 0.00, to = 0.33},
+        {tab = sTab2, from = 0.33, to = 0.66},
+        {tab = sTab3, from = 0.66, to = 1.00},
     }
-    for i, m in ipairs(map) do
-        local prevThreshold = (i == 1) and 0 or map[i-1].threshold
-        local active = p >= prevThreshold and p <= m.threshold + 0.01
-        local done = p > m.threshold
-        if active or done then
+    for _, m in ipairs(map) do
+        local active = p >= m.from
+        if active then
             m.tab.dot.BackgroundColor3 = COLOR_ACCENT
             m.tab.lbl.TextColor3 = COLOR_TEXT
         else
@@ -278,8 +273,8 @@ end
 local mainUi = Instance.new("Frame")
 mainUi.Name = "MainUI"
 mainUi.BackgroundColor3 = COLOR_BG
-mainUi.Size = UDim2.new(0, 560, 0, 340)
-mainUi.Position = UDim2.new(0.5, -280, 0.5, -170)
+mainUi.Size = UDim2.new(0, 540, 0, 330)
+mainUi.Position = UDim2.new(0.5, -270, 0.5, -165)
 mainUi.Active = true
 mainUi.Draggable = true
 mainUi.Visible = false
@@ -293,14 +288,13 @@ mainStroke.Transparency = 0.3
 mainStroke.Parent = mainUi
 applyRedBorder(mainStroke)
 
--- ============ SIDEBAR KIRI ============
+-- SIDEBAR
 local sidebar = Instance.new("Frame")
 sidebar.BackgroundColor3 = Color3.fromRGB(12, 12, 16)
-sidebar.Size = UDim2.new(0, 150, 1, 0)
+sidebar.Size = UDim2.new(0, 145, 1, 0)
 sidebar.ZIndex = 51
 sidebar.Parent = mainUi
 corner(sidebar, 16)
--- mask kanan biar cuma kiri rounded
 local sidebarMask = Instance.new("Frame")
 sidebarMask.BackgroundColor3 = Color3.fromRGB(12, 12, 16)
 sidebarMask.BorderSizePixel = 0
@@ -309,53 +303,52 @@ sidebarMask.Position = UDim2.new(1, -16, 0, 0)
 sidebarMask.ZIndex = 51
 sidebarMask.Parent = sidebar
 
--- Logo sidebar
 local sbLogo = Instance.new("Frame")
 sbLogo.BackgroundColor3 = COLOR_SURFACE_2
-sbLogo.Size = UDim2.new(0, 34, 0, 34)
-sbLogo.Position = UDim2.new(0, 14, 0, 14)
+sbLogo.Size = UDim2.new(0, 30, 0, 30)
+sbLogo.Position = UDim2.new(0, 12, 0, 12)
 sbLogo.ZIndex = 52
 sbLogo.Parent = sidebar
-corner(sbLogo, 10)
+corner(sbLogo, 8)
 local sbLogoStroke = Instance.new("UIStroke")
 sbLogoStroke.Color = COLOR_ACCENT
 sbLogoStroke.Thickness = 1
 sbLogoStroke.Transparency = 0.4
 sbLogoStroke.Parent = sbLogo
-makeLabel(sbLogo, "sxc", UDim2.new(1,0,1,0), UDim2.new(0,0,0,0),
-    COLOR_ACCENT_H, Enum.Font.GothamBlack, 10, Enum.TextXAlignment.Center).ZIndex = 53
+makeLabel(sbLogo, "s", UDim2.new(1,0,1,0), UDim2.new(0,0,0,0),
+    COLOR_ACCENT_H, Enum.Font.GothamBlack, 12, Enum.TextXAlignment.Center).ZIndex = 53
 
-makeLabel(sidebar, "sadvze x cute", UDim2.new(1,-56,0,14),
-    UDim2.new(0, 54, 0, 18), COLOR_TEXT, Enum.Font.GothamBold, 10).ZIndex = 52
-makeLabel(sidebar, "v1.0 PRO", UDim2.new(1,-56,0,12),
-    UDim2.new(0, 54, 0, 32), COLOR_MUTED, Enum.Font.Gotham, 8).ZIndex = 52
+makeLabel(sidebar, "sadvze x cute", UDim2.new(1,-50,0,14),
+    UDim2.new(0, 48, 0, 14), COLOR_TEXT, Enum.Font.GothamBold, 10).ZIndex = 52
+makeLabel(sidebar, "v1.0 PRO", UDim2.new(1,-50,0,12),
+    UDim2.new(0, 48, 0, 28), COLOR_MUTED, Enum.Font.Gotham, 8).ZIndex = 52
 
--- Divider
 local sbDiv = Instance.new("Frame")
 sbDiv.BackgroundColor3 = COLOR_SURFACE_2
-sbDiv.Size = UDim2.new(1, -24, 0, 1)
-sbDiv.Position = UDim2.new(0, 12, 0, 62)
+sbDiv.Size = UDim2.new(1, -20, 0, 1)
+sbDiv.Position = UDim2.new(0, 10, 0, 54)
 sbDiv.ZIndex = 52
 sbDiv.Parent = sidebar
 
 -- Menu items
-local menuItems = {}
 local function makeMenuItem(text, posY, icon)
-    local row = Instance.new("Frame")
+    local row = Instance.new("TextButton")
     row.BackgroundColor3 = COLOR_BG
     row.BackgroundTransparency = 1
-    row.Size = UDim2.new(1, -20, 0, 30)
-    row.Position = UDim2.new(0, 10, 0, posY)
+    row.Text = ""
+    row.AutoButtonColor = false
+    row.Size = UDim2.new(1, -16, 0, 28)
+    row.Position = UDim2.new(0, 8, 0, posY)
     row.ZIndex = 52
     row.Parent = sidebar
     corner(row, 7)
 
     local ico = makeLabel(row, icon, UDim2.new(0, 20, 1, 0),
-        UDim2.new(0, 10, 0, 0), COLOR_MUTED, Enum.Font.GothamBold, 11)
+        UDim2.new(0, 8, 0, 0), COLOR_MUTED, Enum.Font.GothamBold, 11)
     ico.ZIndex = 53
 
-    local lbl = makeLabel(row, text, UDim2.new(1, -34, 1, 0),
-        UDim2.new(0, 32, 0, 0), COLOR_MUTED, Enum.Font.GothamMedium, 10)
+    local lbl = makeLabel(row, text, UDim2.new(1, -30, 1, 0),
+        UDim2.new(0, 28, 0, 0), COLOR_MUTED, Enum.Font.GothamMedium, 10)
     lbl.ZIndex = 53
 
     local function setActive(on)
@@ -376,21 +369,20 @@ local function makeMenuItem(text, posY, icon)
     return {row = row, lbl = lbl, ico = ico, setActive = setActive}
 end
 
-local menuOverview = makeMenuItem("Overview", 74, "◈")
-local menuParser   = makeMenuItem("Parser",   108, "▣")
-local menuImporter = makeMenuItem("Importer", 142, "⚡")
-local menuSettings = makeMenuItem("Settings", 176, "⚙")
+local menuOverview = makeMenuItem("Overview", 64, "◈")
+local menuParser   = makeMenuItem("Parser",   96, "▣")
+local menuImporter = makeMenuItem("Importer", 128, "⚡")
+local menuSettings = makeMenuItem("Settings", 160, "⚙")
 
--- Divider
 local sbDiv2 = Instance.new("Frame")
 sbDiv2.BackgroundColor3 = COLOR_SURFACE_2
-sbDiv2.Size = UDim2.new(1, -24, 0, 1)
-sbDiv2.Position = UDim2.new(0, 12, 1, -94)
+sbDiv2.Size = UDim2.new(1, -20, 0, 1)
+sbDiv2.Position = UDim2.new(0, 10, 1, -88)
 sbDiv2.ZIndex = 52
 sbDiv2.Parent = sidebar
 
-makeLabel(sidebar, "QUICK TOOLS", UDim2.new(1,-24,0,12),
-    UDim2.new(0, 14, 1, -82), COLOR_DIM, Enum.Font.GothamBold, 8).ZIndex = 52
+makeLabel(sidebar, "QUICK TOOLS", UDim2.new(1,-20,0,12),
+    UDim2.new(0, 12, 1, -76), COLOR_DIM, Enum.Font.GothamBold, 8).ZIndex = 52
 
 local rescanBtn = Instance.new("TextButton")
 rescanBtn.Text = "⟳  Rescan Assets"
@@ -398,21 +390,20 @@ rescanBtn.Font = Enum.Font.GothamBold
 rescanBtn.TextSize = 9
 rescanBtn.TextColor3 = COLOR_TEXT
 rescanBtn.BackgroundColor3 = COLOR_SURFACE_2
-rescanBtn.Size = UDim2.new(1, -24, 0, 30)
-rescanBtn.Position = UDim2.new(0, 12, 1, -66)
+rescanBtn.Size = UDim2.new(1, -20, 0, 28)
+rescanBtn.Position = UDim2.new(0, 10, 1, -60)
 rescanBtn.ZIndex = 53
 rescanBtn.Parent = sidebar
 corner(rescanBtn, 7)
 
--- ============ MAIN PANEL KANAN ============
+-- MAIN PANEL
 local mainPanel = Instance.new("Frame")
 mainPanel.BackgroundTransparency = 1
-mainPanel.Size = UDim2.new(1, -150, 1, 0)
-mainPanel.Position = UDim2.new(0, 150, 0, 0)
+mainPanel.Size = UDim2.new(1, -145, 1, 0)
+mainPanel.Position = UDim2.new(0, 145, 0, 0)
 mainPanel.ZIndex = 51
 mainPanel.Parent = mainUi
 
--- Header
 makeLabel(mainPanel, "System Profile", UDim2.new(0.6,0,0,18),
     UDim2.new(0, 18, 0, 14), COLOR_TEXT, Enum.Font.GothamBold, 13).ZIndex = 52
 
@@ -422,22 +413,22 @@ closeMain.Font = Enum.Font.GothamBold
 closeMain.TextSize = 10
 closeMain.TextColor3 = COLOR_MUTED
 closeMain.BackgroundColor3 = COLOR_SURFACE_2
-closeMain.Size = UDim2.new(0, 24, 0, 24)
-closeMain.Position = UDim2.new(1, -36, 0, 12)
+closeMain.Size = UDim2.new(0, 22, 0, 22)
+closeMain.Position = UDim2.new(1, -32, 0, 12)
 closeMain.ZIndex = 53
 closeMain.Parent = mainPanel
 corner(closeMain, 6)
 closeMain.MouseButton1Click:Connect(function() mainUi.Visible = false end)
 
--- ============ PAGE CONTAINER ============
+-- Pages
 local pages = Instance.new("Frame")
 pages.BackgroundTransparency = 1
-pages.Size = UDim2.new(1, -24, 1, -50)
-pages.Position = UDim2.new(0, 12, 0, 44)
+pages.Size = UDim2.new(1, -24, 1, -46)
+pages.Position = UDim2.new(0, 12, 0, 42)
 pages.ZIndex = 52
 pages.Parent = mainPanel
 
--- PAGE: OVERVIEW (profile card)
+-- PAGE OVERVIEW
 local pageOverview = Instance.new("Frame")
 pageOverview.BackgroundTransparency = 1
 pageOverview.Size = UDim2.new(1, 0, 1, 0)
@@ -447,7 +438,7 @@ pageOverview.Parent = pages
 -- Profile card
 local profileCard = Instance.new("Frame")
 profileCard.BackgroundColor3 = COLOR_SURFACE
-profileCard.Size = UDim2.new(1, 0, 0, 62)
+profileCard.Size = UDim2.new(1, 0, 0, 60)
 profileCard.ZIndex = 53
 profileCard.Parent = pageOverview
 corner(profileCard, 10)
@@ -458,32 +449,33 @@ pcStroke.Parent = profileCard
 
 local avCircle = Instance.new("Frame")
 avCircle.BackgroundColor3 = COLOR_ACCENT
-avCircle.Size = UDim2.new(0, 40, 0, 40)
-avCircle.Position = UDim2.new(0, 12, 0.5, -20)
+avCircle.Size = UDim2.new(0, 38, 0, 38)
+avCircle.Position = UDim2.new(0, 12, 0.5, -19)
 avCircle.ZIndex = 54
 avCircle.Parent = profileCard
-corner(avCircle, 20)
+corner(avCircle, 19)
 local avStroke2 = Instance.new("UIStroke")
 avStroke2.Color = COLOR_ACCENT_H
 avStroke2.Thickness = 1.5
 avStroke2.Transparency = 0.3
 avStroke2.Parent = avCircle
+makeLabel(avCircle, string.sub(LocalPlayer.DisplayName or LocalPlayer.Name, 1, 1),
+    UDim2.new(1,0,1,0), UDim2.new(0,0,0,0),
+    COLOR_TEXT, Enum.Font.GothamBlack, 15, Enum.TextXAlignment.Center).ZIndex = 55
 
-local nameLbl = makeLabel(profileCard, LocalPlayer.DisplayName or LocalPlayer.Name,
-    UDim2.new(1, -80, 0, 16), UDim2.new(0, 62, 0, 12),
-    COLOR_TEXT, Enum.Font.GothamBold, 12)
-nameLbl.ZIndex = 54
+makeLabel(profileCard, LocalPlayer.DisplayName or LocalPlayer.Name,
+    UDim2.new(1, -80, 0, 16), UDim2.new(0, 60, 0, 12),
+    COLOR_TEXT, Enum.Font.GothamBold, 12).ZIndex = 54
 
-local userLbl = makeLabel(profileCard, "@" .. LocalPlayer.Name .. "  ·  ID " .. tostring(LocalPlayer.UserId),
-    UDim2.new(1, -80, 0, 12), UDim2.new(0, 62, 0, 30),
-    COLOR_MUTED, Enum.Font.Gotham, 8)
-userLbl.ZIndex = 54
+makeLabel(profileCard, "@" .. LocalPlayer.Name .. "  ·  ID " .. tostring(LocalPlayer.UserId),
+    UDim2.new(1, -80, 0, 12), UDim2.new(0, 60, 0, 30),
+    COLOR_MUTED, Enum.Font.Gotham, 8).ZIndex = 54
 
 -- Grid cards
 local card1 = Instance.new("Frame")
 card1.BackgroundColor3 = COLOR_SURFACE
-card1.Size = UDim2.new(0.5, -6, 0, 50)
-card1.Position = UDim2.new(0, 0, 0, 70)
+card1.Size = UDim2.new(0.5, -6, 0, 46)
+card1.Position = UDim2.new(0, 0, 0, 68)
 card1.ZIndex = 53
 card1.Parent = pageOverview
 corner(card1, 10)
@@ -491,16 +483,15 @@ local c1Stroke = Instance.new("UIStroke")
 c1Stroke.Color = Color3.fromRGB(40, 40, 50)
 c1Stroke.Thickness = 1
 c1Stroke.Parent = card1
-
 makeLabel(card1, "Trial Access", UDim2.new(1,-16,0,14),
-    UDim2.new(0, 12, 0, 8), COLOR_TEXT, Enum.Font.GothamBold, 10).ZIndex = 54
+    UDim2.new(0, 12, 0, 6), COLOR_TEXT, Enum.Font.GothamBold, 10).ZIndex = 54
 makeLabel(card1, "Status Access", UDim2.new(1,-16,0,12),
-    UDim2.new(0, 12, 0, 26), COLOR_MUTED, Enum.Font.Gotham, 8).ZIndex = 54
+    UDim2.new(0, 12, 0, 24), COLOR_MUTED, Enum.Font.Gotham, 8).ZIndex = 54
 
 local card2 = Instance.new("Frame")
 card2.BackgroundColor3 = COLOR_SURFACE
-card2.Size = UDim2.new(0.5, -6, 0, 50)
-card2.Position = UDim2.new(0.5, 6, 0, 70)
+card2.Size = UDim2.new(0.5, -6, 0, 46)
+card2.Position = UDim2.new(0.5, 6, 0, 68)
 card2.ZIndex = 53
 card2.Parent = pageOverview
 corner(card2, 10)
@@ -508,17 +499,16 @@ local c2Stroke = Instance.new("UIStroke")
 c2Stroke.Color = Color3.fromRGB(40, 40, 50)
 c2Stroke.Thickness = 1
 c2Stroke.Parent = card2
-
 makeLabel(card2, "Studio Lite", UDim2.new(1,-16,0,14),
-    UDim2.new(0, 12, 0, 8), COLOR_TEXT, Enum.Font.GothamBold, 10).ZIndex = 54
+    UDim2.new(0, 12, 0, 6), COLOR_TEXT, Enum.Font.GothamBold, 10).ZIndex = 54
 makeLabel(card2, "Core Engine", UDim2.new(1,-16,0,12),
-    UDim2.new(0, 12, 0, 26), COLOR_MUTED, Enum.Font.Gotham, 8).ZIndex = 54
+    UDim2.new(0, 12, 0, 24), COLOR_MUTED, Enum.Font.Gotham, 8).ZIndex = 54
 
 -- Wide card
 local card3 = Instance.new("Frame")
 card3.BackgroundColor3 = COLOR_SURFACE
-card3.Size = UDim2.new(1, 0, 0, 50)
-card3.Position = UDim2.new(0, 0, 0, 128)
+card3.Size = UDim2.new(1, 0, 0, 46)
+card3.Position = UDim2.new(0, 0, 0, 122)
 card3.ZIndex = 53
 card3.Parent = pageOverview
 corner(card3, 10)
@@ -529,20 +519,20 @@ c3Stroke.Parent = card3
 
 local c3Logo = Instance.new("Frame")
 c3Logo.BackgroundColor3 = COLOR_ACCENT
-c3Logo.Size = UDim2.new(0, 30, 0, 30)
-c3Logo.Position = UDim2.new(0, 12, 0.5, -15)
+c3Logo.Size = UDim2.new(0, 28, 0, 28)
+c3Logo.Position = UDim2.new(0, 12, 0.5, -14)
 c3Logo.ZIndex = 54
 c3Logo.Parent = card3
 corner(c3Logo, 8)
 makeLabel(c3Logo, "s", UDim2.new(1,0,1,0), UDim2.new(0,0,0,0),
-    COLOR_TEXT, Enum.Font.GothamBlack, 13, Enum.TextXAlignment.Center).ZIndex = 55
+    COLOR_TEXT, Enum.Font.GothamBlack, 12, Enum.TextXAlignment.Center).ZIndex = 55
 
 makeLabel(card3, "sadvze x cute", UDim2.new(1,-80,0,14),
-    UDim2.new(0, 52, 0, 8), COLOR_TEXT, Enum.Font.GothamBold, 10).ZIndex = 54
+    UDim2.new(0, 50, 0, 6), COLOR_TEXT, Enum.Font.GothamBold, 10).ZIndex = 54
 makeLabel(card3, "Developed by LO 🖤", UDim2.new(1,-80,0,12),
-    UDim2.new(0, 52, 0, 26), COLOR_MUTED, Enum.Font.Gotham, 8).ZIndex = 54
+    UDim2.new(0, 50, 0, 24), COLOR_MUTED, Enum.Font.Gotham, 8).ZIndex = 54
 
--- PAGE: PARSER (rbxm list)
+-- PAGE PARSER (rbxm)
 local pageParser = Instance.new("Frame")
 pageParser.BackgroundTransparency = 1
 pageParser.Size = UDim2.new(1, 0, 1, 0)
@@ -563,13 +553,12 @@ parserScroll.ScrollBarThickness = 3
 parserScroll.ScrollBarImageColor3 = COLOR_ACCENT
 parserScroll.ZIndex = 53
 parserScroll.Parent = pageParser
-make("UIListLayout", {Padding = UDim.new(0, 6), Parent = parserScroll}) -- placeholder
 
 local parserLayout = Instance.new("UIListLayout")
 parserLayout.Padding = UDim.new(0, 6)
 parserLayout.Parent = parserScroll
 
--- PAGE: IMPORTER (rbxl list)
+-- PAGE IMPORTER (rbxl)
 local pageImporter = Instance.new("Frame")
 pageImporter.BackgroundTransparency = 1
 pageImporter.Size = UDim2.new(1, 0, 1, 0)
@@ -578,6 +567,4 @@ pageImporter.ZIndex = 52
 pageImporter.Parent = pages
 
 makeLabel(pageImporter, "Importer RBXL Places", UDim2.new(1,-16,0,16),
-    UDim2.new(0, 4, 0, 0), COLOR_TEXT, Enum.Font.GothamBold, 11).ZIndex = 53
-
-local importerScroll = Instance
+    UDim2.new(0, 4, 0, 0), COLOR_TEXT
