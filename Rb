@@ -1,70 +1,79 @@
 -- ============================================================
--- ENI Project Importer v1.0
--- Mirip UI import .rbxl / .rbxlx / .rbxm di Studio Lite
--- Jalan di Delta / executor Android
+-- ENI Project Importer v2.0 (defensive build)
+-- Aman kalau function executor nggak lengkap
+-- Jalan di Delta / executor Android / Studio Lite
 -- ============================================================
+
+-- ============ DIAGNOSTIC DULU ============
+print("========== ENI IMPORTER v2.0 ==========")
+print("[DIAG] syn      =", tostring(syn))
+print("[DIAG] fluxus   =", tostring(fluxus))
+print("[DIAG] delta    =", tostring(delta))
+print("[DIAG] codex    =", tostring(codex))
+print("[DIAG] readfile =", tostring(readfile))
+print("[DIAG] listfiles=", tostring(listfiles))
+print("[DIAG] writefile=", tostring(writefile))
+print("[DIAG] task     =", tostring(task))
+print("[DIAG] game     =", tostring(game))
+print("=======================================")
+
+-- ============ SAFE FUNCTION RESOLVER ============
+local function getFn(name)
+    -- cek global dulu
+    if _G[name] and type(_G[name]) == "function" then return _G[name] end
+    -- cek executor table
+    local execs = {syn, fluxus, delta, codex, arceusx}
+    for _, e in ipairs(execs) do
+        if type(e) == "table" and type(e[name]) == "function" then
+            return e[name]
+        end
+    end
+    return nil
+end
+
+local _readfile  = getFn("readfile")
+local _listfiles = getFn("listfiles")
+local _writefile = getFn("writefile")
+
+-- ============ SAFE WAIT ============
+local function wait_(t)
+    if task and task.wait then task.wait(t) end
+    if wait then wait(t) end
+end
 
 -- ============ CONFIG ============
 local CONFIG = {
     ScanPaths = {
         "/sdcard/Download",
         "/sdcard/Documents",
-        "/sdcard/Android/data",
-        "/sdcard/Roblox",
+        "/sdcard",
     },
     Extensions = {".rbxl", ".rbxlx", ".rbxm"},
-    AccentColor = Color3.fromRGB(110, 80, 220),  -- ungu
+    AccentColor = Color3.fromRGB(110, 80, 220),
     BgColor = Color3.fromRGB(15, 15, 22),
     PanelColor = Color3.fromRGB(25, 25, 35),
     TextColor = Color3.fromRGB(230, 230, 240),
 }
 
--- ============ EXECUTOR DETECT ============
-local function getExecutor()
-    if syn then return "Synapse" end
-    if fluxus then return "Fluxus" end
-    if delta then return "Delta" end
-    if codex then return "Codex" end
-    if arceusx then return "ArceusX" end
-    if KRNL_LOADED then return "Krnl" end
-    return "Unknown"
-end
+-- ============ SAFE UI PARENT ============
+local function getUIParent()
+    local ok, cg = pcall(function() return game:GetService("CoreGui") end)
+    if ok and cg then return cg, "CoreGui" end
 
-local function listFiles(path)
-    if listfiles then return listfiles(path) end
-    if syn and syn.listfiles then return syn.listfiles(path) end
-    if fluxus and fluxus.listfiles then return fluxus.listfiles(path) end
-    return nil
-end
-
-local function readFile(path)
-    if readfile then return readfile(path) end
-    if syn and syn.readfile then return syn.readfile(path) end
-    if fluxus and fluxus.readfile then return fluxus.readfile(path) end
-    return nil
-end
-
-local function isModelFile(name)
-    local lower = string.lower(name)
-    for _, ext in ipairs(CONFIG.Extensions) do
-        if string.sub(lower, -#ext) == ext then return true, ext end
+    local lp = game:GetService("Players").LocalPlayer
+    if lp then
+        local ok2, pg = pcall(function() return lp:WaitForChild("PlayerGui", 3) end)
+        if ok2 and pg then return pg, "PlayerGui" end
     end
-    return false, nil
+    return nil, "NONE"
 end
 
--- ============ STATE ============
-local State = {
-    files = {},       -- {name=, path=, ext=}
-    scanned = false,
-    imported = 0,
-    rbxmCount = 0,
-    rbxlCount = 0,
-}
-
--- ============ UI BUILD ============
+-- ============ UI HELPERS ============
 local function make(class, props, children)
     local inst = Instance.new(class)
-    for k, v in pairs(props or {}) do inst[k] = v end
+    for k, v in pairs(props or {}) do
+        pcall(function() inst[k] = v end)
+    end
     for _, c in ipairs(children or {}) do c.Parent = inst end
     return inst
 end
@@ -81,14 +90,21 @@ local function stroke(color, thickness)
     })
 end
 
+-- ============ BUILD UI ============
+local uiParent, parentName = getUIParent()
+print("[ENI] UI parent:", parentName)
+if not uiParent then
+    warn("[ENI] Nggak ada UI parent. Script stop.")
+    return
+end
+
 local screen = make("ScreenGui", {
     Name = "ENI_Importer",
     ResetOnSpawn = false,
     ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
     IgnoreGuiInset = true,
 })
-pcall(function() screen.Parent = game:GetService("CoreGui") end)
-if not screen.Parent then screen.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui") end
+screen.Parent = uiParent
 
 -- Main frame
 local main = make("Frame", {
@@ -116,7 +132,6 @@ make("Frame", {
     BorderSizePixel = 0,
 }).Parent = header
 
--- Avatar circle
 local avatar = make("Frame", {
     Size = UDim2.new(0, 42, 0, 42),
     Position = UDim2.new(0, 14, 0.5, -21),
@@ -133,12 +148,11 @@ make("TextLabel", {
     TextSize = 16,
 }).Parent = avatar
 
--- Title
 make("TextLabel", {
     Size = UDim2.new(0, 400, 0, 22),
     Position = UDim2.new(0, 68, 0, 10),
     BackgroundTransparency = 1,
-    Text = "ENI x LO  •  Project Importer",
+    Text = "ENI x LO  •  Project Importer v2",
     TextColor3 = CONFIG.TextColor,
     Font = Enum.Font.GothamBold,
     TextSize = 16,
@@ -156,7 +170,6 @@ make("TextLabel", {
     TextXAlignment = Enum.TextXAlignment.Left,
 }).Parent = header
 
--- Premium badge
 make("TextButton", {
     Size = UDim2.new(0, 110, 0, 30),
     Position = UDim2.new(1, -170, 0.5, -15),
@@ -169,7 +182,6 @@ make("TextButton", {
     AutoButtonColor = false,
 }, {corner(8), stroke(Color3.fromRGB(80, 80, 140), 1)}).Parent = header
 
--- Close button
 local closeBtn = make("TextButton", {
     Size = UDim2.new(0, 34, 0, 34),
     Position = UDim2.new(1, -48, 0.5, -17),
@@ -183,7 +195,7 @@ local closeBtn = make("TextButton", {
 closeBtn.Parent = header
 closeBtn.MouseButton1Click:Connect(function() screen:Destroy() end)
 
--- Body layout
+-- Body
 local body = make("Frame", {
     Size = UDim2.new(1, -28, 1, -150),
     Position = UDim2.new(0, 14, 0, 74),
@@ -191,7 +203,7 @@ local body = make("Frame", {
 })
 body.Parent = main
 
--- LEFT PANEL: File Library
+-- LEFT
 local leftPanel = make("Frame", {
     Size = UDim2.new(0.45, -8, 1, 0),
     BackgroundColor3 = CONFIG.PanelColor,
@@ -221,7 +233,6 @@ make("TextLabel", {
     TextXAlignment = Enum.TextXAlignment.Left,
 }).Parent = leftPanel
 
--- Search bar
 local searchBox = make("TextBox", {
     Size = UDim2.new(1, -24, 0, 32),
     Position = UDim2.new(0, 12, 0, 54),
@@ -238,7 +249,6 @@ local searchBox = make("TextBox", {
 }, {corner(8), stroke(Color3.fromRGB(60, 60, 90), 1)})
 searchBox.Parent = leftPanel
 
--- Scroll list
 local scroll = make("ScrollingFrame", {
     Size = UDim2.new(1, -24, 1, -150),
     Position = UDim2.new(0, 12, 0, 96),
@@ -250,13 +260,12 @@ local scroll = make("ScrollingFrame", {
 })
 scroll.Parent = leftPanel
 
-local listLayout = make("UIListLayout", {
+make("UIListLayout", {
     Padding = UDim.new(0, 6),
     SortOrder = Enum.SortOrder.LayoutOrder,
-})
-listLayout.Parent = scroll
+}).Parent = scroll
 
--- RIGHT PANEL: Import Project
+-- RIGHT
 local rightPanel = make("Frame", {
     Size = UDim2.new(0.55, -8, 1, 0),
     Position = UDim2.new(0.45, 8, 0, 0),
@@ -287,41 +296,51 @@ make("TextLabel", {
     TextXAlignment = Enum.TextXAlignment.Left,
 }).Parent = rightPanel
 
--- Drop area
-local dropArea = make("Frame", {
-    Size = UDim2.new(1, -24, 0, 100),
+-- Manual path input (untuk fallback kalau listfiles nggak ada)
+local manualBox = make("TextBox", {
+    Size = UDim2.new(1, -24, 0, 32),
     Position = UDim2.new(0, 12, 0, 54),
     BackgroundColor3 = Color3.fromRGB(18, 18, 28),
     BorderSizePixel = 0,
-}, {corner(10), stroke(Color3.fromRGB(80, 80, 130), 1)})
-dropArea.Parent = rightPanel
-
-make("TextLabel", {
-    Size = UDim2.new(1, 0, 1, 0),
-    BackgroundTransparency = 1,
-    Text = "FILE LIBRARY — SELECT TO IMPORT",
-    TextColor3 = Color3.fromRGB(120, 120, 150),
-    Font = Enum.Font.GothamBold,
+    Text = "",
+    PlaceholderText = "Manual path: /sdcard/Download/file.rbxm",
+    PlaceholderColor3 = Color3.fromRGB(90, 90, 110),
+    TextColor3 = CONFIG.TextColor,
+    Font = Enum.Font.Code,
     TextSize = 11,
-}).Parent = dropArea
+    TextXAlignment = Enum.TextXAlignment.Left,
+    ClearTextOnFocus = false,
+}, {corner(8), stroke(Color3.fromRGB(60, 60, 90), 1)})
+manualBox.Parent = rightPanel
 
--- Scan button
 local scanBtn = make("TextButton", {
-    Size = UDim2.new(1, -24, 0, 44),
-    Position = UDim2.new(0, 12, 0, 166),
+    Size = UDim2.new(0.55, -18, 0, 40),
+    Position = UDim2.new(0, 12, 0, 96),
     BackgroundColor3 = CONFIG.AccentColor,
     Text = "SCAN",
     TextColor3 = Color3.fromRGB(255, 255, 255),
     Font = Enum.Font.GothamBold,
-    TextSize = 14,
+    TextSize = 13,
     BorderSizePixel = 0,
 }, {corner(10)})
 scanBtn.Parent = rightPanel
 
--- Status line
+local manualBtn = make("TextButton", {
+    Size = UDim2.new(0.45, -18, 0, 40),
+    Position = UDim2.new(0.55, 6, 0, 96),
+    BackgroundColor3 = Color3.fromRGB(60, 50, 110),
+    Text = "IMPORT PATH",
+    TextColor3 = Color3.fromRGB(255, 255, 255),
+    Font = Enum.Font.GothamBold,
+    TextSize = 12,
+    BorderSizePixel = 0,
+}, {corner(10)})
+manualBtn.Parent = rightPanel
+
+-- Status
 local statusDot = make("Frame", {
     Size = UDim2.new(0, 8, 0, 8),
-    Position = UDim2.new(0, 12, 0, 226),
+    Position = UDim2.new(0, 12, 0, 150),
     BackgroundColor3 = Color3.fromRGB(80, 200, 120),
     BorderSizePixel = 0,
 }, {corner(4)})
@@ -329,7 +348,7 @@ statusDot.Parent = rightPanel
 
 local statusLabel = make("TextLabel", {
     Size = UDim2.new(0.6, 0, 0, 14),
-    Position = UDim2.new(0, 26, 0, 223),
+    Position = UDim2.new(0, 26, 0, 147),
     BackgroundTransparency = 1,
     Text = "READY",
     TextColor3 = Color3.fromRGB(130, 130, 155),
@@ -340,7 +359,7 @@ local statusLabel = make("TextLabel", {
 
 local countsLabel = make("TextLabel", {
     Size = UDim2.new(0.4, -12, 0, 14),
-    Position = UDim2.new(0.6, 0, 0, 223),
+    Position = UDim2.new(0.6, 0, 0, 147),
     BackgroundTransparency = 1,
     Text = "FILES 0  •  IMP 0",
     TextColor3 = Color3.fromRGB(130, 130, 155),
@@ -349,10 +368,9 @@ local countsLabel = make("TextLabel", {
     TextXAlignment = Enum.TextXAlignment.Right,
 }).Parent = rightPanel
 
--- Log box
 local logBox = make("Frame", {
-    Size = UDim2.new(1, -24, 0, 32),
-    Position = UDim2.new(0, 12, 1, -44),
+    Size = UDim2.new(1, -24, 0, 60),
+    Position = UDim2.new(0, 12, 1, -72),
     BackgroundColor3 = Color3.fromRGB(18, 18, 28),
     BorderSizePixel = 0,
 }, {corner(8), stroke(Color3.fromRGB(60, 60, 90), 1)})
@@ -362,11 +380,13 @@ local logLabel = make("TextLabel", {
     Size = UDim2.new(1, -16, 1, 0),
     Position = UDim2.new(0, 8, 0, 0),
     BackgroundTransparency = 1,
-    Text = "> ENI importer ready.",
+    Text = "> ENI importer v2 ready.",
     TextColor3 = Color3.fromRGB(150, 150, 180),
     Font = Enum.Font.Code,
-    TextSize = 11,
+    TextSize = 10,
     TextXAlignment = Enum.TextXAlignment.Left,
+    TextYAlignment = Enum.TextYAlignment.Top,
+    TextWrapped = true,
 }).Parent = logBox
 
 local function log(msg)
@@ -374,19 +394,22 @@ local function log(msg)
     print("[ENI] " .. msg)
 end
 
--- ============ FILE CARD BUILDER ============
-local function buildFileCard(file)
+-- ============ STATE ============
+local State = {files = {}, imported = 0, rbxm = 0, rbxl = 0}
+
+-- ============ FILE CARD ============
+local function buildCard(file)
     local card = make("Frame", {
         Size = UDim2.new(1, 0, 0, 78),
         BackgroundColor3 = Color3.fromRGB(20, 20, 30),
         BorderSizePixel = 0,
     }, {corner(10), stroke(Color3.fromRGB(60, 60, 90), 1)})
 
-    -- Ext badge
     local extColor = file.ext == ".rbxm" and Color3.fromRGB(120, 90, 220)
         or file.ext == ".rbxl" and Color3.fromRGB(80, 140, 220)
         or Color3.fromRGB(200, 120, 60)
-    local badge = make("TextButton", {
+
+    make("TextButton", {
         Size = UDim2.new(0, 50, 0, 20),
         Position = UDim2.new(0, 10, 0, 8),
         BackgroundColor3 = extColor,
@@ -396,10 +419,8 @@ local function buildFileCard(file)
         TextSize = 10,
         BorderSizePixel = 0,
         AutoButtonColor = false,
-    }, {corner(5)})
-    badge.Parent = card
+    }, {corner(5)}).Parent = card
 
-    -- Import button
     local importBtn = make("TextButton", {
         Size = UDim2.new(0, 70, 0, 22),
         Position = UDim2.new(1, -80, 0, 8),
@@ -412,8 +433,7 @@ local function buildFileCard(file)
     }, {corner(5)})
     importBtn.Parent = card
 
-    -- File name
-    local nameLbl = make("TextLabel", {
+    make("TextLabel", {
         Size = UDim2.new(1, -100, 0, 18),
         Position = UDim2.new(0, 10, 0, 30),
         BackgroundTransparency = 1,
@@ -423,10 +443,8 @@ local function buildFileCard(file)
         TextSize = 11,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextTruncate = Enum.TextTruncate.AtEnd,
-    })
-    nameLbl.Parent = card
+    }).Parent = card
 
-    -- Path
     make("TextLabel", {
         Size = UDim2.new(1, -20, 0, 14),
         Position = UDim2.new(0, 10, 0, 50),
@@ -439,40 +457,43 @@ local function buildFileCard(file)
         TextTruncate = Enum.TextTruncate.AtEnd,
     }).Parent = card
 
-    -- Import action
     importBtn.MouseButton1Click:Connect(function()
         importBtn.Text = "..."
-        importBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
         log("Importing: " .. file.name)
 
         local ok, err = pcall(function()
-            local data = readFile(file.path)
-            if not data then error("readfile gagal — cek path") end
-
-            -- Method 1: GetObjects
-            local got = game:GetObjects(file.path)
-            if got and #got > 0 then
-                for _, obj in ipairs(got) do
-                    obj.Parent = game:GetService("Workspace")
+            -- Cek GetObjects
+            if type(game.GetObjects) == "function" then
+                local got = game:GetObjects(file.path)
+                if got and #got > 0 then
+                    for _, obj in ipairs(got) do
+                        obj.Parent = game:GetService("Workspace")
+                    end
+                    return true, "GetObjects (" .. #got .. " objek)"
                 end
-                return #got
             end
 
-            -- Method 2: InsertService fallback
+            -- Fallback InsertService
             local IS = game:GetService("InsertService")
-            local model = IS:LoadLocalAsset(file.path)
-            model.Parent = game:GetService("Workspace")
-            return 1
+            if type(IS.LoadLocalAsset) == "function" then
+                local model = IS:LoadLocalAsset(file.path)
+                if model then
+                    model.Parent = game:GetService("Workspace")
+                    return true, "InsertService"
+                end
+            end
+
+            error("Semua method import gagal")
         end)
 
         if ok then
             State.imported = State.imported + 1
-            importBtn.Text = "✓ DONE"
+            importBtn.Text = "DONE"
             importBtn.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
             countsLabel.Text = string.format("FILES %d  •  IMP %d", #State.files, State.imported)
-            log("Imported: " .. file.name)
+            log("Berhasil: " .. file.name .. " via " .. tostring(err))
         else
-            importBtn.Text = "✗ FAIL"
+            importBtn.Text = "FAIL"
             importBtn.BackgroundColor3 = Color3.fromRGB(200, 80, 80)
             log("Gagal: " .. tostring(err))
         end
@@ -481,71 +502,88 @@ local function buildFileCard(file)
     return card
 end
 
--- ============ SCAN LOGIC ============
+-- ============ RENDER ============
 local function renderFiles(filter)
     for _, child in ipairs(scroll:GetChildren()) do
         if child:IsA("Frame") then child:Destroy() end
     end
-
     local shown = 0
     for _, file in ipairs(State.files) do
         if filter == "" or string.find(string.lower(file.name), string.lower(filter), 1, true) then
-            buildFileCard(file).Parent = scroll
+            buildCard(file).Parent = scroll
             shown = shown + 1
         end
     end
-
     scroll.CanvasSize = UDim2.new(0, 0, 0, shown * 84)
-    return shown
 end
 
+-- ============ SCAN ============
 scanBtn.MouseButton1Click:Connect(function()
+    if not _listfiles then
+        log("listfiles() nggak ada. Pakai IMPORT PATH manual.")
+        statusLabel.Text = "NO LISTFILES"
+        statusDot.BackgroundColor3 = Color3.fromRGB(240, 200, 80)
+        return
+    end
+
     scanBtn.Text = "SCANNING..."
     statusLabel.Text = "SCANNING..."
     statusDot.BackgroundColor3 = Color3.fromRGB(240, 200, 80)
     State.files = {}
-    State.rbxmCount = 0
-    State.rbxlCount = 0
+    State.rbxm = 0
+    State.rbxl = 0
 
-    task.wait(0.1)
+    wait_(0.1)
 
-    local scannedAny = false
     for _, dir in ipairs(CONFIG.ScanPaths) do
-        local ok, files = pcall(function() return listFiles(dir) end)
-        if ok and files then
-            scannedAny = true
+        local ok, files = pcall(_listfiles, dir)
+        if ok and type(files) == "table" then
             for _, path in ipairs(files) do
                 local name = string.match(path, "([^/]+)$") or path
-                local isModel, ext = isModelFile(name)
-                if isModel then
+                local lower = string.lower(name)
+                local ext = nil
+                if string.sub(lower, -5) == ".rbxm" then ext = ".rbxm"
+                elseif string.sub(lower, -5) == ".rbxl" then ext = ".rbxl"
+                elseif string.sub(lower, -6) == ".rbxlx" then ext = ".rbxlx" end
+
+                if ext then
                     table.insert(State.files, {name = name, path = path, ext = ext})
-                    if ext == ".rbxm" then State.rbxmCount = State.rbxmCount + 1
-                    elseif ext == ".rbxl" then State.rbxlCount = State.rbxlCount + 1 end
+                    if ext == ".rbxm" then State.rbxm = State.rbxm + 1
+                    else State.rbxl = State.rbxl + 1 end
                 end
             end
         end
     end
 
-    task.wait(0.1)
+    wait_(0.1)
     renderFiles("")
-
     scanBtn.Text = "SCAN"
     statusDot.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
-
-    if not scannedAny then
-        statusLabel.Text = "SCAN FAILED — listfiles nil"
-        log("listfiles() nggak tersedia. Executor kamu nggak support scan otomatis.")
-    else
-        statusLabel.Text = string.format("SCAN COMPLETE  •  RBXL %d  •  RBXM %d", State.rbxlCount, State.rbxmCount)
-        countsLabel.Text = string.format("FILES %d  •  IMP %d", #State.files, State.imported)
-        log(string.format("Scan selesai: %d file ditemukan.", #State.files))
-    end
+    statusLabel.Text = string.format("SCAN OK  •  RBXL %d  •  RBXM %d", State.rbxl, State.rbxm)
+    countsLabel.Text = string.format("FILES %d  •  IMP %d", #State.files, State.imported)
+    log(string.format("Scan selesai: %d file.", #State.files))
 end)
 
--- Search filter
+-- ============ MANUAL IMPORT ============
+manualBtn.MouseButton1Click:Connect(function()
+    local path = manualBox.Text
+    if path == "" then
+        log("Path kosong. Ketik dulu.")
+        return
+    end
+    local name = string.match(path, "([^/]+)$") or path
+    local ext = string.sub(string.lower(name), -5)
+    if ext ~= ".rbxm" and ext ~= ".rbxl" and string.sub(string.lower(name), -6) ~= ".rbxlx" then
+        log("Extensi bukan .rbxm/.rbxl/.rbxlx")
+        return
+    end
+    table.insert(State.files, {name = name, path = path, ext = "." .. string.gsub(ext, "%.", "")})
+    renderFiles("")
+    log("Ditambah manual: " .. name)
+end)
+
 searchBox:GetPropertyChangedSignal("Text"):Connect(function()
     renderFiles(searchBox.Text)
 end)
 
-log("ENI importer loaded. Tekan SCAN buat mulai.")
-print("[ENI] Executor: " .. getExecutor())
+log("v2 ready. Tekan SCAN atau pakai IMPORT PATH manual.")
