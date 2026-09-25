@@ -1,6 +1,6 @@
 --[[ ============================================================
      SADVZE X CUTE — PREMIUM IMPORTER
-     Full Edition + Full Service Restore (rbxl support)
+     Full UI + Vortex Border Merah-Hitam Berputar
      ============================================================ ]]
 
 local CoreGui       = game:GetService("CoreGui")
@@ -86,59 +86,52 @@ local function applyTextGradient(label, cA, cMid, cB)
     return g
 end
 
-local function applyRedBorder(target, thickness)
+-- VORTEX BORDER MERAH-HITAM BERPUTAR
+-- Ini yang bikin border muter terus kayak gradient melingkar
+local function applyVortexBorder(stroke, thickness, speed)
+    stroke.Thickness = thickness or 2.5
+    stroke.Transparency = 0
     local grad = Instance.new("UIGradient")
     grad.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0.00, Color3.fromRGB(255, 40, 60)),
-        ColorSequenceKeypoint.new(0.33, Color3.fromRGB(255, 120, 140)),
-        ColorSequenceKeypoint.new(0.66, Color3.fromRGB(140, 15, 30)),
+        ColorSequenceKeypoint.new(0.20, Color3.fromRGB(255, 130, 150)),
+        ColorSequenceKeypoint.new(0.40, Color3.fromRGB(80, 10, 25)),
+        ColorSequenceKeypoint.new(0.60, Color3.fromRGB(255, 60, 90)),
+        ColorSequenceKeypoint.new(0.80, Color3.fromRGB(140, 15, 30)),
         ColorSequenceKeypoint.new(1.00, Color3.fromRGB(255, 40, 60)),
     })
-    grad.Parent = target
-    if thickness then target.Thickness = thickness end
+    grad.Parent = stroke
     RunService.RenderStepped:Connect(function()
-        grad.Rotation = (tick() * 40) % 360
+        grad.Rotation = (tick() * (speed or 60)) % 360
     end)
+    return grad
 end
 
--- FULL SERVICE RESTORE (buat rbxl/rbxlx)
 local function processModelParts(inst)
     if not inst then return end
-
-    -- DataModel: iterasi semua service, restore ke service yang sama
     if inst.ClassName == "DataModel" then
-        print("[SADVZE] DataModel detected — restoring all services")
+        print("[SADVZE] DataModel — restoring services")
         for _, svc in ipairs(inst:GetChildren()) do
             local svcName = svc.ClassName
             local targetSvc = game:FindFirstChild(svcName)
             if targetSvc and targetSvc ~= game then
-                print("[SADVZE] Restoring:", svcName, "→", #svc:GetChildren(), "children")
                 for _, child in ipairs(svc:GetChildren()) do
-                    local ok = pcall(function() child.Parent = targetSvc end)
-                    if ok then print("[SADVZE]   →", child.ClassName, child.Name) end
+                    pcall(function() child.Parent = targetSvc end)
                 end
-            else
-                print("[SADVZE] Skip:", svcName, "(no target service)")
             end
         end
         return
     end
-
-    -- Single service (TimerService, Workspace, dll): restore ke service yang sama
     if SERVICE_NAMES[inst.ClassName] or SERVICE_NAMES[inst.Name] then
         local svcName = inst.ClassName
         local targetSvc = game:FindFirstChild(svcName)
         if targetSvc then
-            print("[SADVZE] Restoring:", svcName)
             for _, child in ipairs(inst:GetChildren()) do
-                local ok = pcall(function() child.Parent = targetSvc end)
-                if ok then print("[SADVZE]   →", child.ClassName, child.Name) end
+                pcall(function() child.Parent = targetSvc end)
             end
         end
         return
     end
-
-    -- Objek biasa (Model, BasePart, Folder): anchor + collide
     if inst:IsA("BasePart") then
         inst.Anchored = true
         inst.CanCollide = true
@@ -164,28 +157,23 @@ local function refreshScripts(model)
     end)
 end
 
--- LOAD: InsertService dulu, baru getobjects
 local function loadModelFile(filePath)
     local toInsert = {}
     local assetId = ""
-
-    -- Coba getAsset dulu
     local okAsset, aid = pcall(function() return getAsset(filePath) end)
     if okAsset and aid and aid ~= "" then assetId = aid end
 
-    -- Prioritas 1: InsertService:LoadLocalAsset
     if assetId ~= "" then
         local okIns, resIns = pcall(function()
             return InsertService:LoadLocalAsset(assetId)
         end)
         if okIns and resIns then
-            print("[SADVZE] InsertService loaded:", resIns.ClassName, resIns.Name)
+            print("[SADVZE] InsertService loaded:", resIns.ClassName)
             table.insert(toInsert, resIns)
             return toInsert
         end
     end
 
-    -- Prioritas 2: getobjects
     local okGet, res = pcall(function()
         if getobjects then
             return getobjects(assetId ~= "" and assetId or filePath)
@@ -193,21 +181,14 @@ local function loadModelFile(filePath)
     end)
     if okGet and res and type(res) == "table" and #res > 0 then
         for _, obj in ipairs(res) do
-            print("[SADVZE] getobjects returned:", obj.ClassName, obj.Name)
+            print("[SADVZE] getobjects:", obj.ClassName)
             table.insert(toInsert, obj)
         end
-        return toInsert
     end
-
-    -- Prioritas 3: readfile (log aja, ga bisa parse)
-    local okRead, rawData = pcall(function() return readFileData(filePath) end)
-    if okRead and rawData then
-        print("[SADVZE] readfile returned", #rawData, "bytes — cannot parse binary")
-    end
-
     return toInsert
 end
 
+-- ROOT
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "SadvzeCuteImporter"
 screenGui.ResetOnSpawn = false
@@ -224,25 +205,26 @@ end
 
 -- TOGGLE
 local toggleIcon = Instance.new("TextButton")
-toggleIcon.Size = UDim2.new(0, 44, 0, 44)
-toggleIcon.Position = UDim2.new(0, 15, 0.5, -22)
+toggleIcon.Size = UDim2.new(0, 46, 0, 46)
+toggleIcon.Position = UDim2.new(0, 15, 0.5, -23)
 toggleIcon.BackgroundColor3 = COLOR_ACCENT
 toggleIcon.Text = "sxc"
 toggleIcon.TextColor3 = COLOR_TEXT
 toggleIcon.Font = Enum.Font.GothamBold
-toggleIcon.TextSize = 11
+toggleIcon.TextSize = 12
 toggleIcon.Active = true
 toggleIcon.Draggable = true
 toggleIcon.ZIndex = 300
 toggleIcon.Parent = screenGui
-corner(toggleIcon, 22)
+corner(toggleIcon, 23)
 applyGradient(toggleIcon, Color3.fromRGB(240, 60, 90), Color3.fromRGB(140, 15, 35), 135)
 local toggleStroke = Instance.new("UIStroke")
-toggleStroke.Thickness = 2
 toggleStroke.Parent = toggleIcon
-applyRedBorder(toggleStroke)
+applyVortexBorder(toggleStroke, 2.5, 80)
 
+-- ============================================================
 -- SPLASH
+-- ============================================================
 local splash = Instance.new("Frame")
 splash.BackgroundColor3 = Color3.fromRGB(5, 5, 8)
 splash.Size = UDim2.new(0, 320, 0, 230)
@@ -254,9 +236,8 @@ corner(splash, 16)
 applyGradient(splash, Color3.fromRGB(35, 8, 15), Color3.fromRGB(5, 5, 8), 135)
 
 local splashStroke = Instance.new("UIStroke")
-splashStroke.Thickness = 2
 splashStroke.Parent = splash
-applyRedBorder(splashStroke)
+applyVortexBorder(splashStroke, 2.5, 60)
 
 local splashLogo = Instance.new("Frame")
 splashLogo.BackgroundColor3 = COLOR_SURFACE_2
@@ -347,7 +328,9 @@ local function setSplashProgress(p)
     end
 end
 
--- MAIN
+-- ============================================================
+-- MAIN UI FRAME — dengan VORTEX BORDER MERAH-HITAM BERPUTAR
+-- ============================================================
 local mainUi = Instance.new("Frame")
 mainUi.BackgroundColor3 = COLOR_BG
 mainUi.Size = UDim2.new(0, 540, 0, 330)
@@ -360,11 +343,12 @@ mainUi.Parent = screenGui
 corner(mainUi, 16)
 applyGradient(mainUi, Color3.fromRGB(25, 10, 16), Color3.fromRGB(8, 8, 10), 135)
 
+-- VORTEX BORDER UTAMA — yang muter di tepi MainFrame
 local mainStroke = Instance.new("UIStroke")
-mainStroke.Thickness = 2
 mainStroke.Parent = mainUi
-applyRedBorder(mainStroke)
+applyVortexBorder(mainStroke, 2.5, 55)
 
+-- SIDEBAR
 local sidebar = Instance.new("Frame")
 sidebar.BackgroundColor3 = Color3.fromRGB(12, 8, 14)
 sidebar.Size = UDim2.new(0, 145, 1, 0)
@@ -513,7 +497,6 @@ pages.Position = UDim2.new(0, 12, 0, 42)
 pages.ZIndex = 52
 pages.Parent = mainPanel
 
--- OVERVIEW
 local pageOverview = Instance.new("Frame")
 pageOverview.BackgroundTransparency = 1
 pageOverview.Size = UDim2.new(1, 0, 1, 0)
@@ -577,7 +560,6 @@ makeLabel(card2, "Studio Lite", UDim2.new(1,-16,0,14),
 makeLabel(card2, "Core Engine", UDim2.new(1,-16,0,12),
     UDim2.new(0, 12, 0, 24), COLOR_MUTED, Enum.Font.Gotham, 8).ZIndex = 54
 
--- PARSER
 local pageParser = Instance.new("Frame")
 pageParser.BackgroundTransparency = 1
 pageParser.Size = UDim2.new(1, 0, 1, 0)
@@ -603,7 +585,6 @@ local parserLayout = Instance.new("UIListLayout")
 parserLayout.Padding = UDim.new(0, 6)
 parserLayout.Parent = parserScroll
 
--- IMPORTER
 local pageImporter = Instance.new("Frame")
 pageImporter.BackgroundTransparency = 1
 pageImporter.Size = UDim2.new(1, 0, 1, 0)
@@ -701,22 +682,13 @@ local function makeFileCard(fileName, fileExt, filePath, parentFrame)
 
     importBtn.MouseButton1Click:Connect(function()
         importBtn.Text = "..."
-        print("[SADVZE] ======== IMPORT START ========")
-        print("[SADVZE] File:", fileName)
-        print("[SADVZE] Path:", filePath)
-
+        print("[SADVZE] Loading:", filePath)
         local loaded = loadModelFile(filePath)
-        print("[SADVZE] Total loaded:", #loaded)
-
+        print("[SADVZE] Loaded objects:", #loaded)
         if loaded and #loaded > 0 then
             for _, obj in ipairs(loaded) do
-                print("[SADVZE] Processing:", obj.ClassName, obj.Name)
-                local ok = pcall(function() obj.Parent = Workspace end)
-                if ok then
-                    print("[SADVZE]   parented to Workspace")
-                else
-                    print("[SADVZE]   parent failed, using service restore")
-                end
+                print("[SADVZE]  obj:", obj.ClassName, obj.Name)
+                pcall(function() obj.Parent = Workspace end)
                 processModelParts(obj)
                 refreshScripts(obj)
             end
@@ -725,9 +697,7 @@ local function makeFileCard(fileName, fileExt, filePath, parentFrame)
         else
             importBtn.Text = "✗ FAIL"
             importBtn.BackgroundColor3 = COLOR_DANGER
-            print("[SADVZE] Nothing loaded — file may be too large or unsupported")
         end
-        print("[SADVZE] ======== IMPORT END ========")
     end)
 end
 
