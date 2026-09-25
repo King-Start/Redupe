@@ -1,0 +1,551 @@
+-- ============================================================
+-- ENI Project Importer v1.0
+-- Mirip UI import .rbxl / .rbxlx / .rbxm di Studio Lite
+-- Jalan di Delta / executor Android
+-- ============================================================
+
+-- ============ CONFIG ============
+local CONFIG = {
+    ScanPaths = {
+        "/sdcard/Download",
+        "/sdcard/Documents",
+        "/sdcard/Android/data",
+        "/sdcard/Roblox",
+    },
+    Extensions = {".rbxl", ".rbxlx", ".rbxm"},
+    AccentColor = Color3.fromRGB(110, 80, 220),  -- ungu
+    BgColor = Color3.fromRGB(15, 15, 22),
+    PanelColor = Color3.fromRGB(25, 25, 35),
+    TextColor = Color3.fromRGB(230, 230, 240),
+}
+
+-- ============ EXECUTOR DETECT ============
+local function getExecutor()
+    if syn then return "Synapse" end
+    if fluxus then return "Fluxus" end
+    if delta then return "Delta" end
+    if codex then return "Codex" end
+    if arceusx then return "ArceusX" end
+    if KRNL_LOADED then return "Krnl" end
+    return "Unknown"
+end
+
+local function listFiles(path)
+    if listfiles then return listfiles(path) end
+    if syn and syn.listfiles then return syn.listfiles(path) end
+    if fluxus and fluxus.listfiles then return fluxus.listfiles(path) end
+    return nil
+end
+
+local function readFile(path)
+    if readfile then return readfile(path) end
+    if syn and syn.readfile then return syn.readfile(path) end
+    if fluxus and fluxus.readfile then return fluxus.readfile(path) end
+    return nil
+end
+
+local function isModelFile(name)
+    local lower = string.lower(name)
+    for _, ext in ipairs(CONFIG.Extensions) do
+        if string.sub(lower, -#ext) == ext then return true, ext end
+    end
+    return false, nil
+end
+
+-- ============ STATE ============
+local State = {
+    files = {},       -- {name=, path=, ext=}
+    scanned = false,
+    imported = 0,
+    rbxmCount = 0,
+    rbxlCount = 0,
+}
+
+-- ============ UI BUILD ============
+local function make(class, props, children)
+    local inst = Instance.new(class)
+    for k, v in pairs(props or {}) do inst[k] = v end
+    for _, c in ipairs(children or {}) do c.Parent = inst end
+    return inst
+end
+
+local function corner(r)
+    return make("UICorner", {CornerRadius = UDim.new(0, r or 8)})
+end
+
+local function stroke(color, thickness)
+    return make("UIStroke", {
+        Color = color or CONFIG.AccentColor,
+        Thickness = thickness or 1,
+        Transparency = 0.5,
+    })
+end
+
+local screen = make("ScreenGui", {
+    Name = "ENI_Importer",
+    ResetOnSpawn = false,
+    ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+    IgnoreGuiInset = true,
+})
+pcall(function() screen.Parent = game:GetService("CoreGui") end)
+if not screen.Parent then screen.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui") end
+
+-- Main frame
+local main = make("Frame", {
+    Name = "Main",
+    Size = UDim2.new(0, 780, 0, 460),
+    Position = UDim2.new(0.5, -390, 0.5, -230),
+    BackgroundColor3 = CONFIG.BgColor,
+    BorderSizePixel = 0,
+    Active = true,
+    Draggable = true,
+}, {corner(14), stroke(CONFIG.AccentColor, 1.5)})
+main.Parent = screen
+
+-- Header
+local header = make("Frame", {
+    Size = UDim2.new(1, 0, 0, 60),
+    BackgroundColor3 = CONFIG.PanelColor,
+    BorderSizePixel = 0,
+}, {corner(14)})
+header.Parent = main
+make("Frame", {
+    Size = UDim2.new(1, 0, 0, 20),
+    Position = UDim2.new(0, 0, 1, -20),
+    BackgroundColor3 = CONFIG.PanelColor,
+    BorderSizePixel = 0,
+}).Parent = header
+
+-- Avatar circle
+local avatar = make("Frame", {
+    Size = UDim2.new(0, 42, 0, 42),
+    Position = UDim2.new(0, 14, 0.5, -21),
+    BackgroundColor3 = Color3.fromRGB(80, 100, 200),
+    BorderSizePixel = 0,
+}, {corner(21)})
+avatar.Parent = header
+make("TextLabel", {
+    Size = UDim2.new(1, 0, 1, 0),
+    BackgroundTransparency = 1,
+    Text = "EN",
+    TextColor3 = Color3.fromRGB(255, 255, 255),
+    Font = Enum.Font.GothamBold,
+    TextSize = 16,
+}).Parent = avatar
+
+-- Title
+make("TextLabel", {
+    Size = UDim2.new(0, 400, 0, 22),
+    Position = UDim2.new(0, 68, 0, 10),
+    BackgroundTransparency = 1,
+    Text = "ENI x LO  •  Project Importer",
+    TextColor3 = CONFIG.TextColor,
+    Font = Enum.Font.GothamBold,
+    TextSize = 16,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}).Parent = header
+
+make("TextLabel", {
+    Size = UDim2.new(0, 400, 0, 16),
+    Position = UDim2.new(0, 68, 0, 32),
+    BackgroundTransparency = 1,
+    Text = "IMPORTER BY ENI  🧡",
+    TextColor3 = Color3.fromRGB(150, 150, 170),
+    Font = Enum.Font.Gotham,
+    TextSize = 11,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}).Parent = header
+
+-- Premium badge
+make("TextButton", {
+    Size = UDim2.new(0, 110, 0, 30),
+    Position = UDim2.new(1, -170, 0.5, -15),
+    BackgroundColor3 = Color3.fromRGB(30, 30, 45),
+    Text = "PREMIUM",
+    TextColor3 = Color3.fromRGB(180, 180, 220),
+    Font = Enum.Font.GothamBold,
+    TextSize = 12,
+    BorderSizePixel = 0,
+    AutoButtonColor = false,
+}, {corner(8), stroke(Color3.fromRGB(80, 80, 140), 1)}).Parent = header
+
+-- Close button
+local closeBtn = make("TextButton", {
+    Size = UDim2.new(0, 34, 0, 34),
+    Position = UDim2.new(1, -48, 0.5, -17),
+    BackgroundColor3 = Color3.fromRGB(30, 30, 45),
+    Text = "X",
+    TextColor3 = Color3.fromRGB(200, 200, 220),
+    Font = Enum.Font.GothamBold,
+    TextSize = 14,
+    BorderSizePixel = 0,
+}, {corner(8)})
+closeBtn.Parent = header
+closeBtn.MouseButton1Click:Connect(function() screen:Destroy() end)
+
+-- Body layout
+local body = make("Frame", {
+    Size = UDim2.new(1, -28, 1, -150),
+    Position = UDim2.new(0, 14, 0, 74),
+    BackgroundTransparency = 1,
+})
+body.Parent = main
+
+-- LEFT PANEL: File Library
+local leftPanel = make("Frame", {
+    Size = UDim2.new(0.45, -8, 1, 0),
+    BackgroundColor3 = CONFIG.PanelColor,
+    BorderSizePixel = 0,
+}, {corner(12), stroke(Color3.fromRGB(60, 60, 90), 1)})
+leftPanel.Parent = body
+
+make("TextLabel", {
+    Size = UDim2.new(1, -24, 0, 24),
+    Position = UDim2.new(0, 12, 0, 12),
+    BackgroundTransparency = 1,
+    Text = "FILE LIBRARY",
+    TextColor3 = CONFIG.TextColor,
+    Font = Enum.Font.GothamBold,
+    TextSize = 13,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}).Parent = leftPanel
+
+make("TextLabel", {
+    Size = UDim2.new(1, -24, 0, 14),
+    Position = UDim2.new(0, 12, 0, 34),
+    BackgroundTransparency = 1,
+    Text = "RBXL / RBXLX / RBXM PROJECTS",
+    TextColor3 = Color3.fromRGB(130, 130, 155),
+    Font = Enum.Font.Gotham,
+    TextSize = 10,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}).Parent = leftPanel
+
+-- Search bar
+local searchBox = make("TextBox", {
+    Size = UDim2.new(1, -24, 0, 32),
+    Position = UDim2.new(0, 12, 0, 54),
+    BackgroundColor3 = Color3.fromRGB(18, 18, 28),
+    BorderSizePixel = 0,
+    Text = "",
+    PlaceholderText = "Search files...",
+    PlaceholderColor3 = Color3.fromRGB(90, 90, 110),
+    TextColor3 = CONFIG.TextColor,
+    Font = Enum.Font.Gotham,
+    TextSize = 12,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    ClearTextOnFocus = false,
+}, {corner(8), stroke(Color3.fromRGB(60, 60, 90), 1)})
+searchBox.Parent = leftPanel
+
+-- Scroll list
+local scroll = make("ScrollingFrame", {
+    Size = UDim2.new(1, -24, 1, -150),
+    Position = UDim2.new(0, 12, 0, 96),
+    BackgroundTransparency = 1,
+    BorderSizePixel = 0,
+    ScrollBarThickness = 4,
+    CanvasSize = UDim2.new(0, 0, 0, 0),
+    AutomaticCanvasSize = Enum.AutomaticSize.Y,
+})
+scroll.Parent = leftPanel
+
+local listLayout = make("UIListLayout", {
+    Padding = UDim.new(0, 6),
+    SortOrder = Enum.SortOrder.LayoutOrder,
+})
+listLayout.Parent = scroll
+
+-- RIGHT PANEL: Import Project
+local rightPanel = make("Frame", {
+    Size = UDim2.new(0.55, -8, 1, 0),
+    Position = UDim2.new(0.45, 8, 0, 0),
+    BackgroundColor3 = CONFIG.PanelColor,
+    BorderSizePixel = 0,
+}, {corner(12), stroke(Color3.fromRGB(60, 60, 90), 1)})
+rightPanel.Parent = body
+
+make("TextLabel", {
+    Size = UDim2.new(1, -24, 0, 24),
+    Position = UDim2.new(0, 12, 0, 12),
+    BackgroundTransparency = 1,
+    Text = "IMPORT PROJECT",
+    TextColor3 = CONFIG.TextColor,
+    Font = Enum.Font.GothamBold,
+    TextSize = 13,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}).Parent = rightPanel
+
+make("TextLabel", {
+    Size = UDim2.new(1, -24, 0, 14),
+    Position = UDim2.new(0, 12, 0, 34),
+    BackgroundTransparency = 1,
+    Text = "Choose an RBXL / RBXLX / RBXM file",
+    TextColor3 = Color3.fromRGB(130, 130, 155),
+    Font = Enum.Font.Gotham,
+    TextSize = 10,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}).Parent = rightPanel
+
+-- Drop area
+local dropArea = make("Frame", {
+    Size = UDim2.new(1, -24, 0, 100),
+    Position = UDim2.new(0, 12, 0, 54),
+    BackgroundColor3 = Color3.fromRGB(18, 18, 28),
+    BorderSizePixel = 0,
+}, {corner(10), stroke(Color3.fromRGB(80, 80, 130), 1)})
+dropArea.Parent = rightPanel
+
+make("TextLabel", {
+    Size = UDim2.new(1, 0, 1, 0),
+    BackgroundTransparency = 1,
+    Text = "FILE LIBRARY — SELECT TO IMPORT",
+    TextColor3 = Color3.fromRGB(120, 120, 150),
+    Font = Enum.Font.GothamBold,
+    TextSize = 11,
+}).Parent = dropArea
+
+-- Scan button
+local scanBtn = make("TextButton", {
+    Size = UDim2.new(1, -24, 0, 44),
+    Position = UDim2.new(0, 12, 0, 166),
+    BackgroundColor3 = CONFIG.AccentColor,
+    Text = "SCAN",
+    TextColor3 = Color3.fromRGB(255, 255, 255),
+    Font = Enum.Font.GothamBold,
+    TextSize = 14,
+    BorderSizePixel = 0,
+}, {corner(10)})
+scanBtn.Parent = rightPanel
+
+-- Status line
+local statusDot = make("Frame", {
+    Size = UDim2.new(0, 8, 0, 8),
+    Position = UDim2.new(0, 12, 0, 226),
+    BackgroundColor3 = Color3.fromRGB(80, 200, 120),
+    BorderSizePixel = 0,
+}, {corner(4)})
+statusDot.Parent = rightPanel
+
+local statusLabel = make("TextLabel", {
+    Size = UDim2.new(0.6, 0, 0, 14),
+    Position = UDim2.new(0, 26, 0, 223),
+    BackgroundTransparency = 1,
+    Text = "READY",
+    TextColor3 = Color3.fromRGB(130, 130, 155),
+    Font = Enum.Font.GothamBold,
+    TextSize = 11,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}).Parent = rightPanel
+
+local countsLabel = make("TextLabel", {
+    Size = UDim2.new(0.4, -12, 0, 14),
+    Position = UDim2.new(0.6, 0, 0, 223),
+    BackgroundTransparency = 1,
+    Text = "FILES 0  •  IMP 0",
+    TextColor3 = Color3.fromRGB(130, 130, 155),
+    Font = Enum.Font.GothamBold,
+    TextSize = 11,
+    TextXAlignment = Enum.TextXAlignment.Right,
+}).Parent = rightPanel
+
+-- Log box
+local logBox = make("Frame", {
+    Size = UDim2.new(1, -24, 0, 32),
+    Position = UDim2.new(0, 12, 1, -44),
+    BackgroundColor3 = Color3.fromRGB(18, 18, 28),
+    BorderSizePixel = 0,
+}, {corner(8), stroke(Color3.fromRGB(60, 60, 90), 1)})
+logBox.Parent = rightPanel
+
+local logLabel = make("TextLabel", {
+    Size = UDim2.new(1, -16, 1, 0),
+    Position = UDim2.new(0, 8, 0, 0),
+    BackgroundTransparency = 1,
+    Text = "> ENI importer ready.",
+    TextColor3 = Color3.fromRGB(150, 150, 180),
+    Font = Enum.Font.Code,
+    TextSize = 11,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}).Parent = logBox
+
+local function log(msg)
+    logLabel.Text = "> " .. msg
+    print("[ENI] " .. msg)
+end
+
+-- ============ FILE CARD BUILDER ============
+local function buildFileCard(file)
+    local card = make("Frame", {
+        Size = UDim2.new(1, 0, 0, 78),
+        BackgroundColor3 = Color3.fromRGB(20, 20, 30),
+        BorderSizePixel = 0,
+    }, {corner(10), stroke(Color3.fromRGB(60, 60, 90), 1)})
+
+    -- Ext badge
+    local extColor = file.ext == ".rbxm" and Color3.fromRGB(120, 90, 220)
+        or file.ext == ".rbxl" and Color3.fromRGB(80, 140, 220)
+        or Color3.fromRGB(200, 120, 60)
+    local badge = make("TextButton", {
+        Size = UDim2.new(0, 50, 0, 20),
+        Position = UDim2.new(0, 10, 0, 8),
+        BackgroundColor3 = extColor,
+        Text = string.upper(string.gsub(file.ext, "%.", "")),
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        Font = Enum.Font.GothamBold,
+        TextSize = 10,
+        BorderSizePixel = 0,
+        AutoButtonColor = false,
+    }, {corner(5)})
+    badge.Parent = card
+
+    -- Import button
+    local importBtn = make("TextButton", {
+        Size = UDim2.new(0, 70, 0, 22),
+        Position = UDim2.new(1, -80, 0, 8),
+        BackgroundColor3 = extColor,
+        Text = "IMPORT",
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        Font = Enum.Font.GothamBold,
+        TextSize = 10,
+        BorderSizePixel = 0,
+    }, {corner(5)})
+    importBtn.Parent = card
+
+    -- File name
+    local nameLbl = make("TextLabel", {
+        Size = UDim2.new(1, -100, 0, 18),
+        Position = UDim2.new(0, 10, 0, 30),
+        BackgroundTransparency = 1,
+        Text = file.name,
+        TextColor3 = CONFIG.TextColor,
+        Font = Enum.Font.GothamBold,
+        TextSize = 11,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+    })
+    nameLbl.Parent = card
+
+    -- Path
+    make("TextLabel", {
+        Size = UDim2.new(1, -20, 0, 14),
+        Position = UDim2.new(0, 10, 0, 50),
+        BackgroundTransparency = 1,
+        Text = file.path,
+        TextColor3 = Color3.fromRGB(110, 110, 140),
+        Font = Enum.Font.Code,
+        TextSize = 9,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+    }).Parent = card
+
+    -- Import action
+    importBtn.MouseButton1Click:Connect(function()
+        importBtn.Text = "..."
+        importBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+        log("Importing: " .. file.name)
+
+        local ok, err = pcall(function()
+            local data = readFile(file.path)
+            if not data then error("readfile gagal — cek path") end
+
+            -- Method 1: GetObjects
+            local got = game:GetObjects(file.path)
+            if got and #got > 0 then
+                for _, obj in ipairs(got) do
+                    obj.Parent = game:GetService("Workspace")
+                end
+                return #got
+            end
+
+            -- Method 2: InsertService fallback
+            local IS = game:GetService("InsertService")
+            local model = IS:LoadLocalAsset(file.path)
+            model.Parent = game:GetService("Workspace")
+            return 1
+        end)
+
+        if ok then
+            State.imported = State.imported + 1
+            importBtn.Text = "✓ DONE"
+            importBtn.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
+            countsLabel.Text = string.format("FILES %d  •  IMP %d", #State.files, State.imported)
+            log("Imported: " .. file.name)
+        else
+            importBtn.Text = "✗ FAIL"
+            importBtn.BackgroundColor3 = Color3.fromRGB(200, 80, 80)
+            log("Gagal: " .. tostring(err))
+        end
+    end)
+
+    return card
+end
+
+-- ============ SCAN LOGIC ============
+local function renderFiles(filter)
+    for _, child in ipairs(scroll:GetChildren()) do
+        if child:IsA("Frame") then child:Destroy() end
+    end
+
+    local shown = 0
+    for _, file in ipairs(State.files) do
+        if filter == "" or string.find(string.lower(file.name), string.lower(filter), 1, true) then
+            buildFileCard(file).Parent = scroll
+            shown = shown + 1
+        end
+    end
+
+    scroll.CanvasSize = UDim2.new(0, 0, 0, shown * 84)
+    return shown
+end
+
+scanBtn.MouseButton1Click:Connect(function()
+    scanBtn.Text = "SCANNING..."
+    statusLabel.Text = "SCANNING..."
+    statusDot.BackgroundColor3 = Color3.fromRGB(240, 200, 80)
+    State.files = {}
+    State.rbxmCount = 0
+    State.rbxlCount = 0
+
+    task.wait(0.1)
+
+    local scannedAny = false
+    for _, dir in ipairs(CONFIG.ScanPaths) do
+        local ok, files = pcall(function() return listFiles(dir) end)
+        if ok and files then
+            scannedAny = true
+            for _, path in ipairs(files) do
+                local name = string.match(path, "([^/]+)$") or path
+                local isModel, ext = isModelFile(name)
+                if isModel then
+                    table.insert(State.files, {name = name, path = path, ext = ext})
+                    if ext == ".rbxm" then State.rbxmCount = State.rbxmCount + 1
+                    elseif ext == ".rbxl" then State.rbxlCount = State.rbxlCount + 1 end
+                end
+            end
+        end
+    end
+
+    task.wait(0.1)
+    renderFiles("")
+
+    scanBtn.Text = "SCAN"
+    statusDot.BackgroundColor3 = Color3.fromRGB(80, 200, 120)
+
+    if not scannedAny then
+        statusLabel.Text = "SCAN FAILED — listfiles nil"
+        log("listfiles() nggak tersedia. Executor kamu nggak support scan otomatis.")
+    else
+        statusLabel.Text = string.format("SCAN COMPLETE  •  RBXL %d  •  RBXM %d", State.rbxlCount, State.rbxmCount)
+        countsLabel.Text = string.format("FILES %d  •  IMP %d", #State.files, State.imported)
+        log(string.format("Scan selesai: %d file ditemukan.", #State.files))
+    end
+end)
+
+-- Search filter
+searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+    renderFiles(searchBox.Text)
+end)
+
+log("ENI importer loaded. Tekan SCAN buat mulai.")
+print("[ENI] Executor: " .. getExecutor())
