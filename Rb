@@ -1,6 +1,6 @@
 --[[ ============================================================
-     SADVZE X CUTE — PREMIUM IMPORTER
-     Full UI + Vortex Border Merah-Hitam Berputar
+     SADVZE X CUTE — PREMIUM IMPORTER + RBXL CONVERTER
+     Full UI + Vortex Border + RBXL → RBXM Converter
      ============================================================ ]]
 
 local CoreGui       = game:GetService("CoreGui")
@@ -14,6 +14,8 @@ local LocalPlayer   = Players.LocalPlayer
 local getFiles     = listfiles or list_files or function() return {} end
 local getAsset     = getcustomasset or getsynasset or function() return "" end
 local readFileData = readfile or function() return nil end
+local writeFileData = writefile or function() end
+local makeFolder   = makefolder or function() end
 
 local COLOR_BG        = Color3.fromRGB(8, 8, 10)
 local COLOR_SURFACE   = Color3.fromRGB(16, 16, 20)
@@ -27,21 +29,7 @@ local COLOR_RBXM      = Color3.fromRGB(180, 60, 90)
 local COLOR_RBXL      = Color3.fromRGB(220, 40, 60)
 local COLOR_SUCCESS   = Color3.fromRGB(90, 220, 140)
 local COLOR_DANGER    = Color3.fromRGB(255, 60, 60)
-
-local SERVICE_NAMES = {
-    Workspace=true, Lighting=true, Players=true, ReplicatedFirst=true,
-    ReplicatedStorage=true, ServerScriptService=true, ServerStorage=true,
-    StarterGui=true, StarterPack=true, StarterPlayer=true, Teams=true,
-    SoundService=true, Chat=true, TimerService=true, CoreGui=true,
-    UserInputService=true, HttpService=true, InsertService=true,
-    LocalizationService=true, ScriptContext=true, LogService=true,
-    GuiService=true, ContentProvider=true, MarketplaceService=true,
-    CollectionService=true, PhysicsService=true, PathfindingService=true,
-    TestService=true, BadgeService=true, GroupService=true,
-    TeleportService=true, AssetService=true, MemoryStoreService=true,
-    DataStoreService=true, PolicyService=true, ProximityPromptService=true,
-    TextChatService=true, VoiceChatService=true,
-}
+local COLOR_WARN      = Color3.fromRGB(240, 200, 80)
 
 local function corner(inst, r)
     local c = Instance.new("UICorner")
@@ -86,8 +74,6 @@ local function applyTextGradient(label, cA, cMid, cB)
     return g
 end
 
--- VORTEX BORDER MERAH-HITAM BERPUTAR
--- Ini yang bikin border muter terus kayak gradient melingkar
 local function applyVortexBorder(stroke, thickness, speed)
     stroke.Thickness = thickness or 2.5
     stroke.Transparency = 0
@@ -115,19 +101,10 @@ local function processModelParts(inst)
             local svcName = svc.ClassName
             local targetSvc = game:FindFirstChild(svcName)
             if targetSvc and targetSvc ~= game then
+                print("[SADVZE] Restore service:", svcName)
                 for _, child in ipairs(svc:GetChildren()) do
                     pcall(function() child.Parent = targetSvc end)
                 end
-            end
-        end
-        return
-    end
-    if SERVICE_NAMES[inst.ClassName] or SERVICE_NAMES[inst.Name] then
-        local svcName = inst.ClassName
-        local targetSvc = game:FindFirstChild(svcName)
-        if targetSvc then
-            for _, child in ipairs(inst:GetChildren()) do
-                pcall(function() child.Parent = targetSvc end)
             end
         end
         return
@@ -157,34 +134,84 @@ local function refreshScripts(model)
     end)
 end
 
+-- ============================================================
+-- RBXL CONVERTER — trik rename .rbxl → .rbxm + retry load
+-- ============================================================
+local function convertRbxlToRbxm(filePath)
+    local raw = nil
+    local okRead = pcall(function() raw = readFileData(filePath) end)
+    if not okRead or not raw then
+        print("[CONV] Gagal baca file:", filePath)
+        return nil
+    end
+
+    print("[CONV] File size:", #raw, "bytes (", math.floor(#raw/1024), "KB )")
+
+    local magic = string.sub(raw, 1, 8)
+    local first100 = string.sub(raw, 1, 100)
+    local isBinary = (magic == "<roblox!")
+    local isXml = (string.find(first100, "<roblox", 1, true) or string.find(first100, "<?xml", 1, true))
+
+    print("[CONV] Format:", isBinary and "BINARY" or (isXml and "XML" or "UNKNOWN"))
+
+    -- Simpan sebagai .rbxm temporary
+    local tempPath = "/sdcard/Download/_sadvze_convert.rbxm"
+    local okWrite = pcall(function() writeFileData(tempPath, raw) end)
+    if not okWrite then
+        print("[CONV] Gagal nulis temp file")
+        return nil
+    end
+    print("[CONV] Temp file:", tempPath)
+
+    return tempPath
+end
+
 local function loadModelFile(filePath)
     local toInsert = {}
-    local assetId = ""
-    local okAsset, aid = pcall(function() return getAsset(filePath) end)
-    if okAsset and aid and aid ~= "" then assetId = aid end
+    local isRbxl = string.find(string.lower(filePath), "%.rbxl") or string.find(string.lower(filePath), "%.rbxlx")
 
+    local actualPath = filePath
+
+    -- Kalau .rbxl / .rbxlx: convert dulu
+    if isRbxl then
+        local converted = convertRbxlToRbxm(filePath)
+        if converted then
+            actualPath = converted
+        end
+    end
+
+    local assetId = ""
+    local okAsset, aid = pcall(function() return getAsset(actualPath) end)
+    if okAsset and aid and aid ~= "" then assetId = aid end
+    print("[LOAD] getAsset:", assetId)
+
+    -- Prioritas 1: InsertService
     if assetId ~= "" then
         local okIns, resIns = pcall(function()
             return InsertService:LoadLocalAsset(assetId)
         end)
         if okIns and resIns then
-            print("[SADVZE] InsertService loaded:", resIns.ClassName)
+            print("[LOAD] InsertService:", resIns.ClassName, resIns.Name)
             table.insert(toInsert, resIns)
             return toInsert
         end
     end
 
+    -- Prioritas 2: getobjects
     local okGet, res = pcall(function()
         if getobjects then
-            return getobjects(assetId ~= "" and assetId or filePath)
+            return getobjects(assetId ~= "" and assetId or actualPath)
         end
     end)
     if okGet and res and type(res) == "table" and #res > 0 then
         for _, obj in ipairs(res) do
-            print("[SADVZE] getobjects:", obj.ClassName)
+            print("[LOAD] getobjects:", obj.ClassName, obj.Name)
             table.insert(toInsert, obj)
         end
+        return toInsert
     end
+
+    print("[LOAD] Semua method gagal")
     return toInsert
 end
 
@@ -222,9 +249,7 @@ local toggleStroke = Instance.new("UIStroke")
 toggleStroke.Parent = toggleIcon
 applyVortexBorder(toggleStroke, 2.5, 80)
 
--- ============================================================
 -- SPLASH
--- ============================================================
 local splash = Instance.new("Frame")
 splash.BackgroundColor3 = Color3.fromRGB(5, 5, 8)
 splash.Size = UDim2.new(0, 320, 0, 230)
@@ -328,13 +353,11 @@ local function setSplashProgress(p)
     end
 end
 
--- ============================================================
--- MAIN UI FRAME — dengan VORTEX BORDER MERAH-HITAM BERPUTAR
--- ============================================================
+-- MAIN UI
 local mainUi = Instance.new("Frame")
 mainUi.BackgroundColor3 = COLOR_BG
-mainUi.Size = UDim2.new(0, 540, 0, 330)
-mainUi.Position = UDim2.new(0.5, -270, 0.5, -165)
+mainUi.Size = UDim2.new(0, 540, 0, 340)
+mainUi.Position = UDim2.new(0.5, -270, 0.5, -170)
 mainUi.Active = true
 mainUi.Draggable = true
 mainUi.Visible = false
@@ -343,12 +366,10 @@ mainUi.Parent = screenGui
 corner(mainUi, 16)
 applyGradient(mainUi, Color3.fromRGB(25, 10, 16), Color3.fromRGB(8, 8, 10), 135)
 
--- VORTEX BORDER UTAMA — yang muter di tepi MainFrame
 local mainStroke = Instance.new("UIStroke")
 mainStroke.Parent = mainUi
 applyVortexBorder(mainStroke, 2.5, 55)
 
--- SIDEBAR
 local sidebar = Instance.new("Frame")
 sidebar.BackgroundColor3 = Color3.fromRGB(12, 8, 14)
 sidebar.Size = UDim2.new(0, 145, 1, 0)
@@ -541,9 +562,9 @@ card1.Parent = pageOverview
 corner(card1, 10)
 applyGradient(card1, Color3.fromRGB(35, 12, 20), Color3.fromRGB(16, 12, 16), 0)
 
-makeLabel(card1, "Trial Access", UDim2.new(1,-16,0,14),
+makeLabel(card1, "RBXM Mode", UDim2.new(1,-16,0,14),
     UDim2.new(0, 12, 0, 6), COLOR_TEXT, Enum.Font.GothamBold, 10).ZIndex = 54
-makeLabel(card1, "Status Access", UDim2.new(1,-16,0,12),
+makeLabel(card1, "Single model import", UDim2.new(1,-16,0,12),
     UDim2.new(0, 12, 0, 24), COLOR_MUTED, Enum.Font.Gotham, 8).ZIndex = 54
 
 local card2 = Instance.new("Frame")
@@ -555,9 +576,9 @@ card2.Parent = pageOverview
 corner(card2, 10)
 applyGradient(card2, Color3.fromRGB(35, 12, 20), Color3.fromRGB(16, 12, 16), 0)
 
-makeLabel(card2, "Studio Lite", UDim2.new(1,-16,0,14),
+makeLabel(card2, "RBXL Mode", UDim2.new(1,-16,0,14),
     UDim2.new(0, 12, 0, 6), COLOR_TEXT, Enum.Font.GothamBold, 10).ZIndex = 54
-makeLabel(card2, "Core Engine", UDim2.new(1,-16,0,12),
+makeLabel(card2, "Auto convert to rbxm", UDim2.new(1,-16,0,12),
     UDim2.new(0, 12, 0, 24), COLOR_MUTED, Enum.Font.Gotham, 8).ZIndex = 54
 
 local pageParser = Instance.new("Frame")
@@ -682,12 +703,16 @@ local function makeFileCard(fileName, fileExt, filePath, parentFrame)
 
     importBtn.MouseButton1Click:Connect(function()
         importBtn.Text = "..."
-        print("[SADVZE] Loading:", filePath)
+        print("[SADVZE] ======== IMPORT ========")
+        print("[SADVZE] File:", fileName)
+        print("[SADVZE] Ext:", fileExt)
+
         local loaded = loadModelFile(filePath)
-        print("[SADVZE] Loaded objects:", #loaded)
+        print("[SADVZE] Loaded:", #loaded)
+
         if loaded and #loaded > 0 then
             for _, obj in ipairs(loaded) do
-                print("[SADVZE]  obj:", obj.ClassName, obj.Name)
+                print("[SADVZE]  obj:", obj.ClassName, obj.Name, "children:", #obj:GetChildren())
                 pcall(function() obj.Parent = Workspace end)
                 processModelParts(obj)
                 refreshScripts(obj)
