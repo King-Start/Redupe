@@ -1,172 +1,28 @@
---[[ ============================================================
-     SADVZE X CUTE — PREMIUM IMPORTER v2
-     Support .rbxm / .rbxmx / .rbxl / .rbxlx
-     Warna: Merah x Hitam
-     Fix: TimerService parent error
-     ============================================================ ]]
+-- ============ FIX: SAFE PARENT (hapus cek nil) ============
+-- Service Roblox punya Parent == game. Objek baru dari getobjects punya Parent == nil.
+-- Yang perlu di-skip cuma SERVICE, bukan semua yang Parent nil.
 
-local CoreGui       = game:GetService("CoreGui")
-local RunService    = game:GetService("RunService")
-local TweenService  = game:GetService("TweenService")
-local Workspace     = game:GetService("Workspace")
-local Players       = game:GetService("Players")
-local InsertService = game:GetService("InsertService")
-local LocalPlayer   = Players.LocalPlayer
-
-local getFiles     = listfiles or list_files or function() return {} end
-local getAsset     = getcustomasset or getsynasset or function() return "" end
-local readFileData = readfile or function() return nil end
-
--- ============ THEME: MERAH x HITAM ============
-local COLOR_BG        = Color3.fromRGB(8, 8, 10)
-local COLOR_SURFACE   = Color3.fromRGB(16, 16, 20)
-local COLOR_SURFACE_2 = Color3.fromRGB(24, 24, 30)
-local COLOR_ACCENT    = Color3.fromRGB(220, 40, 60)     -- merah utama
-local COLOR_ACCENT_H  = Color3.fromRGB(255, 80, 100)    -- merah terang
-local COLOR_DARK      = Color3.fromRGB(40, 10, 15)      -- merah gelap
-local COLOR_TEXT      = Color3.fromRGB(245, 245, 250)
-local COLOR_MUTED     = Color3.fromRGB(140, 140, 155)
-local COLOR_RBXM      = Color3.fromRGB(180, 60, 90)
-local COLOR_RBXL      = Color3.fromRGB(220, 40, 60)
-local COLOR_SUCCESS   = Color3.fromRGB(90, 220, 140)
-local COLOR_DANGER    = Color3.fromRGB(255, 60, 60)
-
-local currentFilter = "ALL"
-
--- ============ HELPERS ============
-local function corner(inst, r)
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, r or 8)
-    c.Parent = inst
-    return c
+local function isService(obj)
+    -- Service biasanya punya Parent == game dan ClassName-nya ada di daftar
+    if RESTRICTED_SERVICES[obj.ClassName] then return true end
+    if RESTRICTED_SERVICES[obj.Name] then return true end
+    if obj.Parent == game then return true end
+    return false
 end
-
-local function makeLabel(parent, text, size, pos, color, font, textSize, xAlign)
-    local lbl = Instance.new("TextLabel")
-    lbl.BackgroundTransparency = 1
-    lbl.Text = text
-    lbl.Font = font or Enum.Font.GothamMedium
-    lbl.TextSize = textSize or 10
-    lbl.TextColor3 = color or COLOR_TEXT
-    lbl.TextXAlignment = xAlign or Enum.TextXAlignment.Left
-    lbl.Size = size
-    lbl.Position = pos
-    lbl.Parent = parent
-    return lbl
-end
-
-local function applyRedBorder(target, thickness)
-    local grad = Instance.new("UIGradient")
-    grad.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0.00, Color3.fromRGB(255, 60, 80)),
-        ColorSequenceKeypoint.new(0.50, Color3.fromRGB(180, 20, 40)),
-        ColorSequenceKeypoint.new(1.00, Color3.fromRGB(255, 60, 80)),
-    })
-    grad.Parent = target
-    if thickness then target.Thickness = thickness end
-    RunService.RenderStepped:Connect(function()
-        grad.Rotation = (tick() * 40) % 360
-    end)
-end
-
--- ============ FIX: FILTER SERVICE YANG NGGAK BISA DI-PARENT ============
-local RESTRICTED_SERVICES = {
-    TimerService = true, CoreGui = true, CorePackages = true,
-    Chat = true, ScriptContext = true, LogService = true,
-    ContentProvider = true, HttpService = true, MarketplaceService = true,
-    MemoryStoreService = true, PolicyService = true, DataStoreService = true,
-    UserInputService = true, ContextActionService = true, GuiService = true,
-    VRService = true, SoundService = true, PhysicsService = true,
-    CollectionService = true, PathfindingService = true, Teams = true,
-    ReplicatedFirst = true, ReplicatedStorage = true, ServerScriptService = true,
-    ServerStorage = true, StarterGui = true, StarterPack = true, StarterPlayer = true,
-    TestService = true, TextChatService = true, VoiceChatService = true,
-    AssetService = true, BadgeService = true, GroupService = true,
-    InsertService = true, JointsService = true, LocalizationService = true,
-    NetworkClient = true, NetworkServer = true, ProximityPromptService = true,
-    ScriptService = true, Selection = true, SocialService = true,
-    TeleportService = true, TouchInputService = true, VRStatusService = true,
-}
 
 local function safeParent(obj)
     if not obj then return false end
-    if RESTRICTED_SERVICES[obj.ClassName] then return false end
-    if RESTRICTED_SERVICES[obj.Name] then return false end
-    -- Service biasanya nggak punya Parent, atau Parent-nya game
-    if obj.Parent == game or obj.Parent == nil then return false end
+    if isService(obj) then return false end
     local ok = pcall(function() obj.Parent = Workspace end)
     return ok
 end
 
--- ============ PROCESS MODEL ============
-local function processModelParts(inst)
-    if not inst then return end
-    local function isRestricted(o)
-        if not o:IsA("BasePart") then return false end
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p.Character and (o == p.Character or o:IsDescendantOf(p.Character)) then
-                return true
-            end
-        end
-        return false
-    end
-    if inst:IsA("BasePart") and not isRestricted(inst) then
-        inst.Anchored = true
-        inst.CanCollide = true
-    end
-    for _, desc in ipairs(inst:GetDescendants()) do
-        if desc:IsA("BasePart") and not isRestricted(desc) then
-            desc.Anchored = true
-            desc.CanCollide = true
-        end
-    end
-end
-
-local function refreshScripts(model)
-    task.defer(function()
-        for _, desc in ipairs(model:GetDescendants()) do
-            if desc:IsA("LocalScript") then
-                local cur = desc.Enabled
-                desc.Enabled = false
-                task.wait(0.2)
-                desc.Enabled = cur
-            end
-        end
-    end)
-end
-
--- ============ LOAD MODEL ============
-local function loadModelFile(filePath)
-    local toInsert = {}
-    local okGet, res = pcall(function()
-        if getobjects then
-            local assetPath = getAsset(filePath)
-            return getobjects(assetPath ~= "" and assetPath or filePath)
-        end
-    end)
-    if okGet and res and type(res) == "table" and #res > 0 then
-        for _, obj in ipairs(res) do table.insert(toInsert, obj) end
-    else
-        local okRead, rawData = pcall(function() return readFileData(filePath) end)
-        if okRead and rawData then
-            local okAsset, assetId = pcall(function() return getAsset(filePath) end)
-            if okAsset and assetId and assetId ~= "" then
-                local okIns, resIns = pcall(function()
-                    return InsertService:LoadLocalAsset(assetId)
-                end)
-                if okIns and resIns then table.insert(toInsert, resIns) end
-            end
-        end
-    end
-    return toInsert
-end
-
--- ============ HANDLE rbxl: EXTRACT WORKSPACE ONLY ============
+-- ============ FIX: IMPORT OBJECT (handle container & service) ============
 local function importObject(obj)
     if not obj then return 0 end
     local count = 0
 
-    -- Kalau DataModel / place: ambil isi Workspace-nya aja
+    -- Kalau DataModel (full place .rbxl): ambil Workspace-nya aja
     if obj.ClassName == "DataModel" then
         local ws = obj:FindFirstChild("Workspace")
         if ws then
@@ -181,11 +37,36 @@ local function importObject(obj)
         return count
     end
 
-    -- Kalau objek biasa
+    -- Kalau objek itu Workspace langsung: ambil isinya
+    if obj.ClassName == "Workspace" then
+        for _, child in ipairs(obj:GetChildren()) do
+            if safeParent(child) then
+                processModelParts(child)
+                refreshScripts(child)
+                count = count + 1
+            end
+        end
+        return count
+    end
+
+    -- Kalau service yang nggak bisa di-parent: coba ambil descendant BasePart/Model
+    if isService(obj) then
+        for _, desc in ipairs(obj:GetDescendants()) do
+            if desc:IsA("Model") or desc:IsA("BasePart") or desc:IsA("Folder") then
+                if safeParent(desc) then
+                    processModelParts(desc)
+                    refreshScripts(desc)
+                    count = count + 1
+                end
+            end
+        end
+        return count
+    end
+
+    -- Objek biasa: parent langsung
     if safeParent(obj) then
         processModelParts(obj)
         refreshScripts(obj)
-        -- Spawn offset
         if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
             local hrp = LocalPlayer.Character.HumanoidRootPart
             local spawnCFrame = hrp.CFrame + (hrp.CFrame.LookVector * 6)
@@ -197,464 +78,6 @@ local function importObject(obj)
         end
         count = 1
     end
+
     return count
 end
-
--- ============ UI ============
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "SadvzeCuteImporter"
-screenGui.ResetOnSpawn = false
-
-pcall(function()
-    local ex = CoreGui:FindFirstChild("SadvzeCuteImporter")
-    if ex then ex:Destroy() end
-    local lpGui = LocalPlayer:FindFirstChild("PlayerGui")
-    if lpGui and lpGui:FindFirstChild("SadvzeCuteImporter") then
-        lpGui.SadvzeCuteImporter:Destroy()
-    end
-end)
-
-local okParent = pcall(function() screenGui.Parent = CoreGui end)
-if not okParent or not screenGui.Parent then
-    screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-end
-
--- Toggle
-local toggleIcon = Instance.new("TextButton")
-toggleIcon.Name = "SadvzeToggle"
-toggleIcon.Size = UDim2.new(0, 46, 0, 46)
-toggleIcon.Position = UDim2.new(0, 15, 0.5, -23)
-toggleIcon.BackgroundColor3 = COLOR_ACCENT
-toggleIcon.Text = "sxc"
-toggleIcon.TextColor3 = COLOR_TEXT
-toggleIcon.Font = Enum.Font.GothamBold
-toggleIcon.TextSize = 12
-toggleIcon.Active = true
-toggleIcon.Draggable = true
-toggleIcon.Parent = screenGui
-corner(toggleIcon, 23)
-
-local tStroke = Instance.new("UIStroke")
-tStroke.Color = COLOR_DARK
-tStroke.Thickness = 1.5
-tStroke.Parent = toggleIcon
-
--- Main frame (LEBAR kayak screenshot)
-local guiContainer = Instance.new("Frame")
-guiContainer.Name = "MainFrame"
-guiContainer.BackgroundColor3 = COLOR_BG
-guiContainer.Size = UDim2.new(0, 620, 0, 380)
-guiContainer.Position = UDim2.new(0.5, -310, 0.5, -190)
-guiContainer.Active = true
-guiContainer.Draggable = true
-guiContainer.Parent = screenGui
-corner(guiContainer, 14)
-
-local shadow = Instance.new("Frame")
-shadow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-shadow.BackgroundTransparency = 0.5
-shadow.Size = UDim2.new(1, 10, 1, 10)
-shadow.Position = UDim2.new(0, -5, 0, 3)
-shadow.ZIndex = 0
-shadow.Parent = guiContainer
-corner(shadow, 16)
-guiContainer.ZIndex = 1
-
-local mainStroke = Instance.new("UIStroke")
-mainStroke.Thickness = 2
-mainStroke.Transparency = 0.2
-mainStroke.Parent = guiContainer
-applyRedBorder(mainStroke)
-
--- ============ HEADER ============
-local header = Instance.new("Frame")
-header.BackgroundColor3 = COLOR_SURFACE
-header.Size = UDim2.new(1, 0, 0, 56)
-header.BorderSizePixel = 0
-header.ZIndex = 2
-header.Parent = guiContainer
-corner(header, 14)
-local headerMask = Instance.new("Frame")
-headerMask.BackgroundColor3 = COLOR_SURFACE
-headerMask.BorderSizePixel = 0
-headerMask.Size = UDim2.new(1, 0, 0, 15)
-headerMask.Position = UDim2.new(0, 0, 1, -15)
-headerMask.ZIndex = 2
-headerMask.Parent = header
-
--- Avatar
-local avatar = Instance.new("Frame")
-avatar.BackgroundColor3 = COLOR_ACCENT
-avatar.Size = UDim2.new(0, 38, 0, 38)
-avatar.Position = UDim2.new(0, 14, 0.5, -19)
-avatar.ZIndex = 3
-avatar.Parent = header
-corner(avatar, 19)
-local avStroke = Instance.new("UIStroke")
-avStroke.Color = COLOR_DARK
-avStroke.Thickness = 1.5
-avStroke.Parent = avatar
-makeLabel(avatar, "s", UDim2.new(1,0,1,0), UDim2.new(0,0,0,0),
-    COLOR_TEXT, Enum.Font.GothamBlack, 18, Enum.TextXAlignment.Center).ZIndex = 4
-
-makeLabel(header, "sadvze x cute", UDim2.new(0.6,0,0,20),
-    UDim2.new(0, 62, 0, 10), COLOR_TEXT, Enum.Font.GothamBold, 15).ZIndex = 3
-makeLabel(header, "IMPORTER BY SADVZE x CUTE 🔥", UDim2.new(0.6,0,0,14),
-    UDim2.new(0, 62, 0, 30), COLOR_MUTED, Enum.Font.Gotham, 9).ZIndex = 3
-
--- Premium badge
-local premBadge = Instance.new("TextButton")
-premBadge.Text = "PREMIUM"
-premBadge.Font = Enum.Font.GothamBold
-premBadge.TextSize = 10
-premBadge.TextColor3 = COLOR_ACCENT_H
-premBadge.BackgroundColor3 = COLOR_SURFACE_2
-premBadge.Size = UDim2.new(0, 100, 0, 28)
-premBadge.Position = UDim2.new(1, -148, 0.5, -14)
-premBadge.ZIndex = 3
-premBadge.AutoButtonColor = false
-premBadge.Parent = header
-corner(premBadge, 8)
-local pbStroke = Instance.new("UIStroke")
-pbStroke.Color = COLOR_ACCENT
-pbStroke.Thickness = 1
-pbStroke.Transparency = 0.4
-pbStroke.Parent = premBadge
-
--- Close
-local closeBtn = Instance.new("TextButton")
-closeBtn.Text = "✕"
-closeBtn.Font = Enum.Font.GothamBold
-closeBtn.TextSize = 12
-closeBtn.TextColor3 = COLOR_TEXT
-closeBtn.BackgroundColor3 = COLOR_SURFACE_2
-closeBtn.Size = UDim2.new(0, 30, 0, 30)
-closeBtn.Position = UDim2.new(1, -42, 0.5, -15)
-closeBtn.ZIndex = 3
-closeBtn.Parent = header
-corner(closeBtn, 8)
-closeBtn.MouseEnter:Connect(function()
-    TweenService:Create(closeBtn, TweenInfo.new(0.15), {BackgroundColor3 = COLOR_ACCENT}):Play()
-end)
-closeBtn.MouseLeave:Connect(function()
-    TweenService:Create(closeBtn, TweenInfo.new(0.15), {BackgroundColor3 = COLOR_SURFACE_2}):Play()
-end)
-closeBtn.MouseButton1Click:Connect(function() guiContainer.Visible = false end)
-
-toggleIcon.MouseButton1Click:Connect(function()
-    guiContainer.Visible = not guiContainer.Visible
-end)
-
--- ============ BODY: DUA PANEL ============
-local body = Instance.new("Frame")
-body.BackgroundTransparency = 1
-body.Size = UDim2.new(1, -28, 1, -68)
-body.Position = UDim2.new(0, 14, 0, 62)
-body.ZIndex = 2
-body.Parent = guiContainer
-
--- LEFT: FILE LIBRARY
-local leftPanel = Instance.new("Frame")
-leftPanel.BackgroundColor3 = COLOR_SURFACE
-leftPanel.Size = UDim2.new(0.45, -6, 1, 0)
-leftPanel.ZIndex = 2
-leftPanel.Parent = body
-corner(leftPanel, 10)
-local ls = Instance.new("UIStroke")
-ls.Color = COLOR_SURFACE_2
-ls.Thickness = 1
-ls.Parent = leftPanel
-
-makeLabel(leftPanel, "FILE LIBRARY", UDim2.new(1,-24,0,18),
-    UDim2.new(0,12,0,12), COLOR_TEXT, Enum.Font.GothamBold, 12)
-makeLabel(leftPanel, "RBXL / RBXLX / RBXM PROJECTS", UDim2.new(1,-24,0,12),
-    UDim2.new(0,12,0,30), COLOR_MUTED, Enum.Font.Gotham, 8)
-
-local searchBox = Instance.new("TextBox")
-searchBox.BackgroundColor3 = COLOR_BG
-searchBox.PlaceholderText = "Search files..."
-searchBox.Text = ""
-searchBox.Font = Enum.Font.Gotham
-searchBox.TextSize = 10
-searchBox.TextColor3 = COLOR_TEXT
-searchBox.PlaceholderColor3 = COLOR_MUTED
-searchBox.Size = UDim2.new(1, -24, 0, 30)
-searchBox.Position = UDim2.new(0, 12, 0, 50)
-searchBox.ZIndex = 3
-searchBox.Parent = leftPanel
-corner(searchBox, 6)
-local sbStroke = Instance.new("UIStroke")
-sbStroke.Color = COLOR_SURFACE_2
-sbStroke.Thickness = 1
-sbStroke.Parent = searchBox
-
--- File scroll
-local fileScroll = Instance.new("ScrollingFrame")
-fileScroll.BackgroundTransparency = 1
-fileScroll.Position = UDim2.new(0, 12, 0, 90)
-fileScroll.Size = UDim2.new(1, -24, 1, -102)
-fileScroll.CanvasSize = UDim2.new(0,0,0,0)
-fileScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-fileScroll.ScrollBarThickness = 3
-fileScroll.ScrollBarImageColor3 = COLOR_ACCENT
-fileScroll.ZIndex = 3
-fileScroll.Parent = leftPanel
-
-local fileLayout = Instance.new("UIListLayout")
-fileLayout.Padding = UDim.new(0, 6)
-fileLayout.Parent = fileScroll
-
--- RIGHT: IMPORT PROJECT
-local rightPanel = Instance.new("Frame")
-rightPanel.BackgroundColor3 = COLOR_SURFACE
-rightPanel.Size = UDim2.new(0.55, -6, 1, 0)
-rightPanel.Position = UDim2.new(0.45, 6, 0, 0)
-rightPanel.ZIndex = 2
-rightPanel.Parent = body
-corner(rightPanel, 10)
-local rs = Instance.new("UIStroke")
-rs.Color = COLOR_SURFACE_2
-rs.Thickness = 1
-rs.Parent = rightPanel
-
-makeLabel(rightPanel, "IMPORT PROJECT", UDim2.new(1,-24,0,18),
-    UDim2.new(0,12,0,12), COLOR_TEXT, Enum.Font.GothamBold, 12)
-makeLabel(rightPanel, "Choose an RBXL / RBXLX / RBXM file", UDim2.new(1,-24,0,12),
-    UDim2.new(0,12,0,30), COLOR_MUTED, Enum.Font.Gotham, 8)
-
--- Drop area
-local dropArea = Instance.new("Frame")
-dropArea.BackgroundColor3 = COLOR_BG
-dropArea.Size = UDim2.new(1, -24, 0, 80)
-dropArea.Position = UDim2.new(0, 12, 0, 50)
-dropArea.ZIndex = 3
-dropArea.Parent = rightPanel
-corner(dropArea, 8)
-local daStroke = Instance.new("UIStroke")
-daStroke.Color = COLOR_ACCENT
-daStroke.Thickness = 1
-daStroke.Transparency = 0.5
-daStroke.Parent = dropArea
-
-makeLabel(dropArea, "FILE LIBRARY — SELECT TO IMPORT",
-    UDim2.new(1,0,1,0), UDim2.new(0,0,0,0),
-    COLOR_MUTED, Enum.Font.GothamBold, 10, Enum.TextXAlignment.Center)
-
--- SCAN button (dengan loading state)
-local scanBtn = Instance.new("TextButton")
-scanBtn.Text = "SCAN"
-scanBtn.Font = Enum.Font.GothamBold
-scanBtn.TextSize = 13
-scanBtn.TextColor3 = COLOR_TEXT
-scanBtn.BackgroundColor3 = COLOR_ACCENT
-scanBtn.Size = UDim2.new(1, -24, 0, 42)
-scanBtn.Position = UDim2.new(0, 12, 0, 142)
-scanBtn.ZIndex = 3
-scanBtn.Parent = rightPanel
-corner(scanBtn, 8)
-scanBtn.MouseEnter:Connect(function()
-    TweenService:Create(scanBtn, TweenInfo.new(0.15), {BackgroundColor3 = COLOR_ACCENT_H}):Play()
-end)
-scanBtn.MouseLeave:Connect(function()
-    TweenService:Create(scanBtn, TweenInfo.new(0.15), {BackgroundColor3 = COLOR_ACCENT}):Play()
-end)
-
--- Status
-local statusDot = Instance.new("Frame")
-statusDot.Size = UDim2.new(0, 8, 0, 8)
-statusDot.Position = UDim2.new(0, 14, 0, 200)
-statusDot.BackgroundColor3 = COLOR_SUCCESS
-statusDot.ZIndex = 3
-statusDot.Parent = rightPanel
-corner(statusDot, 4)
-
-local statusLabel = makeLabel(rightPanel, "READY", UDim2.new(0.6,0,0,14),
-    UDim2.new(0, 26, 0, 197), COLOR_MUTED, Enum.Font.GothamBold, 10)
-
-local countsLabel = makeLabel(rightPanel, "FILES 0  •  IMP 0",
-    UDim2.new(0.4,-12,0,14), UDim2.new(0.6,0,0,197),
-    COLOR_MUTED, Enum.Font.GothamBold, 10, Enum.TextXAlignment.Right)
-
--- Log box
-local logBox = Instance.new("Frame")
-logBox.BackgroundColor3 = COLOR_BG
-logBox.Size = UDim2.new(1, -24, 0, 40)
-logBox.Position = UDim2.new(0, 12, 1, -52)
-logBox.ZIndex = 3
-logBox.Parent = rightPanel
-corner(logBox, 8)
-local lbStroke = Instance.new("UIStroke")
-lbStroke.Color = COLOR_SURFACE_2
-lbStroke.Thickness = 1
-lbStroke.Parent = logBox
-
-local logLabel = makeLabel(logBox, "> SCAN COMPLETE",
-    UDim2.new(1,-16,1,0), UDim2.new(0,8,0,0),
-    COLOR_MUTED, Enum.Font.Code, 9)
-logLabel.TextTruncate = Enum.TextTruncate.AtEnd
-logLabel.TextYAlignment = Enum.TextYAlignment.Center
-
-local function log(msg)
-    logLabel.Text = "> " .. msg
-    print("[SADVZE] " .. msg)
-end
-
--- ============ FILE CARD ============
-local foundFiles = {}
-
-local function makeFileCard(fileName, fileExt, filePath)
-    local isRbxm = (fileExt == "rbxm" or fileExt == "rbxmx")
-    local extColor = isRbxm and COLOR_RBXM or COLOR_RBXL
-
-    local card = Instance.new("Frame")
-    card.BackgroundColor3 = COLOR_SURFACE_2
-    card.Size = UDim2.new(1, -4, 0, 68)
-    card.ZIndex = 3
-    card.Parent = fileScroll
-    corner(card, 8)
-    local cs = Instance.new("UIStroke")
-    cs.Color = Color3.fromRGB(45, 45, 55)
-    cs.Thickness = 1
-    cs.Parent = card
-
-    -- Badge
-    local badge = Instance.new("TextButton")
-    badge.Text = string.upper(fileExt)
-    badge.Font = Enum.Font.GothamBold
-    badge.TextSize = 8
-    badge.TextColor3 = COLOR_TEXT
-    badge.BackgroundColor3 = extColor
-    badge.Size = UDim2.new(0, 46, 0, 18)
-    badge.Position = UDim2.new(0, 10, 0, 8)
-    badge.ZIndex = 4
-    badge.AutoButtonColor = false
-    badge.Parent = card
-    corner(badge, 4)
-
-    -- Import btn
-    local importBtn = Instance.new("TextButton")
-    importBtn.Text = "IMPORT"
-    importBtn.Font = Enum.Font.GothamBold
-    importBtn.TextSize = 8
-    importBtn.TextColor3 = COLOR_TEXT
-    importBtn.BackgroundColor3 = extColor
-    importBtn.Size = UDim2.new(0, 62, 0, 22)
-    importBtn.Position = UDim2.new(1, -72, 0, 8)
-    importBtn.ZIndex = 4
-    importBtn.Parent = card
-    corner(importBtn, 5)
-    importBtn.MouseEnter:Connect(function()
-        TweenService:Create(importBtn, TweenInfo.new(0.15), {BackgroundColor3 = COLOR_ACCENT_H}):Play()
-    end)
-    importBtn.MouseLeave:Connect(function()
-        TweenService:Create(importBtn, TweenInfo.new(0.15), {BackgroundColor3 = extColor}):Play()
-    end)
-
-    -- Name
-    local nameLbl = makeLabel(card, fileName, UDim2.new(1,-90,0,14),
-        UDim2.new(0,10,0,30), COLOR_TEXT, Enum.Font.GothamBold, 9)
-    nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
-    nameLbl.ZIndex = 4
-
-    -- Path
-    local pathLbl = makeLabel(card, filePath, UDim2.new(1,-20,0,12),
-        UDim2.new(0,10,0,46), COLOR_MUTED, Enum.Font.Code, 8)
-    pathLbl.TextTruncate = Enum.TextTruncate.AtEnd
-    pathLbl.ZIndex = 4
-
-    -- Import action
-    importBtn.MouseButton1Click:Connect(function()
-        importBtn.Text = "..."
-        log("Loading: " .. fileName)
-        local loaded = loadModelFile(filePath)
-        if loaded and #loaded > 0 then
-            local total = 0
-            for _, obj in ipairs(loaded) do
-                total = total + importObject(obj)
-            end
-            importBtn.Text = "✓ DONE"
-            importBtn.BackgroundColor3 = COLOR_SUCCESS
-            log("Imported: " .. total .. " objek")
-        else
-            importBtn.Text = "✗ FAIL"
-            importBtn.BackgroundColor3 = COLOR_DANGER
-            log("Gagal load: " .. fileName)
-        end
-    end)
-
-    return card
-end
-
--- ============ SCAN ============
-local scanning = false
-
-local function scanFiles()
-    if scanning then return end
-    scanning = true
-
-    for _, child in ipairs(fileScroll:GetChildren()) do
-        if child:IsA("Frame") then child:Destroy() end
-    end
-    foundFiles = {}
-
-    -- Loading state
-    scanBtn.Text = "SCANNING..."
-    scanBtn.BackgroundColor3 = COLOR_SURFACE_2
-    statusDot.BackgroundColor3 = Color3.fromRGB(240, 200, 80)
-    statusLabel.Text = "SCANNING..."
-    log("Scanning file...")
-
-    task.wait(0.1)
-
-    local files = {}
-    local pathsToTry = {
-        "/sdcard/Download",
-        "/sdcard/Documents",
-        "/sdcard",
-        "workspace", "", ".", "./"
-    }
-    for _, p in ipairs(pathsToTry) do
-        local ok, res = pcall(function() return getFiles(p) end)
-        if ok and type(res) == "table" and #res > 0 then
-            for _, f in ipairs(res) do table.insert(files, f) end
-        end
-    end
-
-    local rbxmCount, rbxlCount = 0, 0
-    for _, filePath in ipairs(files) do
-        local fileName = filePath:match("[^/\\]+$") or filePath
-        local ext = fileName:match("%.([^%.]+)$")
-        if ext then
-            local e = ext:lower()
-            if e == "rbxm" or e == "rbxmx" or e == "rbxl" or e == "rbxlx" then
-                local card = makeFileCard(fileName, e, filePath)
-                table.insert(foundFiles, {row = card, name = fileName, ext = e})
-                if e == "rbxm" or e == "rbxmx" then rbxmCount = rbxmCount + 1
-                else rbxlCount = rbxlCount + 1 end
-            end
-        end
-    end
-
-    scanBtn.Text = "SCAN"
-    scanBtn.BackgroundColor3 = COLOR_ACCENT
-    statusDot.BackgroundColor3 = COLOR_SUCCESS
-    statusLabel.Text = string.format("SCAN COMPLETE  •  RBXL %d  •  RBXM %d", rbxlCount, rbxmCount)
-    countsLabel.Text = string.format("FILES %d  •  IMP 0", #foundFiles)
-    log(string.format("Scan selesai. %d file ditemukan.", #foundFiles))
-
-    scanning = false
-end
-
-scanBtn.MouseButton1Click:Connect(scanFiles)
-searchBox:GetPropertyChangedSignal("Text"):Connect(function()
-    local q = searchBox.Text:lower()
-    for _, item in ipairs(foundFiles) do
-        item.row.Visible = (q == "" or item.name:lower():find(q, 1, true) ~= nil)
-    end
-end)
-
-log("sadvze x cute importer ready.")
-task.spawn(function()
-    task.wait(0.5)
-    scanFiles()
-end)
