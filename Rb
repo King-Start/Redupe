@@ -558,6 +558,10 @@ local parserLayout = Instance.new("UIListLayout")
 parserLayout.Padding = UDim.new(0, 6)
 parserLayout.Parent = parserScroll
 
+-- ============================================================
+-- LANJUTAN DARI PAGE PARSER
+-- ============================================================
+
 -- PAGE IMPORTER (rbxl)
 local pageImporter = Instance.new("Frame")
 pageImporter.BackgroundTransparency = 1
@@ -567,4 +571,198 @@ pageImporter.ZIndex = 52
 pageImporter.Parent = pages
 
 makeLabel(pageImporter, "Importer RBXL Places", UDim2.new(1,-16,0,16),
-    UDim2.new(0, 4, 0, 0), COLOR_TEXT
+    UDim2.new(0, 4, 0, 0), COLOR_TEXT, Enum.Font.GothamBold, 11).ZIndex = 53
+
+local importerScroll = Instance.new("ScrollingFrame")
+importerScroll.BackgroundTransparency = 1
+importerScroll.Position = UDim2.new(0, 0, 0, 22)
+importerScroll.Size = UDim2.new(1, 0, 1, -22)
+importerScroll.CanvasSize = UDim2.new(0,0,0,0)
+importerScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+importerScroll.ScrollBarThickness = 3
+importerScroll.ScrollBarImageColor3 = COLOR_ACCENT
+importerScroll.ZIndex = 53
+importerScroll.Parent = pageImporter
+
+local importerLayout = Instance.new("UIListLayout")
+importerLayout.Padding = UDim.new(0, 6)
+importerLayout.Parent = importerScroll
+
+-- SWITCH PAGE
+local function switchPage(name, menu)
+    pageOverview.Visible = (name == "ov")
+    pageParser.Visible = (name == "pa")
+    pageImporter.Visible = (name == "im")
+    if name == "ov" then
+        mainPanel:FindFirstChildOfClass("TextLabel").Text = "System Profile"
+    elseif name == "pa" then
+        mainPanel:FindFirstChildOfClass("TextLabel").Text = "Parser"
+    else
+        mainPanel:FindFirstChildOfClass("TextLabel").Text = "Importer"
+    end
+    if menu then menu.setActive(true) end
+end
+
+local function resetMenus()
+    menuOverview.setActive(false)
+    menuParser.setActive(false)
+    menuImporter.setActive(false)
+    menuSettings.setActive(false)
+end
+
+menuOverview.row.MouseButton1Click:Connect(function()
+    resetMenus(); switchPage("ov", menuOverview)
+end)
+menuParser.row.MouseButton1Click:Connect(function()
+    resetMenus(); switchPage("pa", menuParser)
+end)
+menuImporter.row.MouseButton1Click:Connect(function()
+    resetMenus(); switchPage("im", menuImporter)
+end)
+menuSettings.row.MouseButton1Click:Connect(function()
+    resetMenus(); switchPage("ov", menuSettings)
+end)
+
+-- FILE CARD
+local function makeFileCard(fileName, fileExt, filePath, parentFrame)
+    local isRbxm = (fileExt == "rbxm" or fileExt == "rbxmx")
+    local extColor = isRbxm and COLOR_RBXM or COLOR_RBXL
+
+    local card = Instance.new("Frame")
+    card.BackgroundColor3 = COLOR_SURFACE_2
+    card.Size = UDim2.new(1, -4, 0, 56)
+    card.ZIndex = 54
+    card.Parent = parentFrame
+    corner(card, 8)
+
+    local badge = Instance.new("TextButton")
+    badge.Text = string.upper(fileExt)
+    badge.Font = Enum.Font.GothamBold
+    badge.TextSize = 7
+    badge.TextColor3 = COLOR_TEXT
+    badge.BackgroundColor3 = extColor
+    badge.Size = UDim2.new(0, 40, 0, 15)
+    badge.Position = UDim2.new(0, 8, 0, 7)
+    badge.ZIndex = 55
+    badge.AutoButtonColor = false
+    badge.Parent = card
+    corner(badge, 4)
+
+    local importBtn = Instance.new("TextButton")
+    importBtn.Text = "IMPORT"
+    importBtn.Font = Enum.Font.GothamBold
+    importBtn.TextSize = 7
+    importBtn.TextColor3 = COLOR_TEXT
+    importBtn.BackgroundColor3 = extColor
+    importBtn.Size = UDim2.new(0, 54, 0, 18)
+    importBtn.Position = UDim2.new(1, -62, 0, 7)
+    importBtn.ZIndex = 55
+    importBtn.Parent = card
+    corner(importBtn, 4)
+
+    makeLabel(card, fileName, UDim2.new(1,-80,0,12),
+        UDim2.new(0, 8, 0, 26), COLOR_TEXT, Enum.Font.GothamBold, 8).ZIndex = 55
+
+    makeLabel(card, filePath, UDim2.new(1,-16,0,10),
+        UDim2.new(0, 8, 0, 42), COLOR_MUTED, Enum.Font.Code, 7).ZIndex = 55
+
+    importBtn.MouseButton1Click:Connect(function()
+        importBtn.Text = "..."
+        local loaded = loadModelFile(filePath)
+        if loaded and #loaded > 0 then
+            for _, obj in ipairs(loaded) do
+                local ok = pcall(function() obj.Parent = Workspace end)
+                if ok then
+                    processModelParts(obj)
+                    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                        local hrp = LocalPlayer.Character.HumanoidRootPart
+                        local cf = hrp.CFrame + (hrp.CFrame.LookVector * 6)
+                        if obj:IsA("Model") and obj.PrimaryPart then
+                            pcall(function() obj:SetPrimaryPartCFrame(cf) end)
+                        elseif obj:IsA("BasePart") then
+                            obj.CFrame = cf
+                        end
+                    end
+                    processModelParts(obj)
+                    refreshScripts(obj)
+                end
+            end
+            importBtn.Text = "✓ DONE"
+            importBtn.BackgroundColor3 = COLOR_SUCCESS
+        else
+            importBtn.Text = "✗ FAIL"
+            importBtn.BackgroundColor3 = COLOR_DANGER
+        end
+    end)
+end
+
+-- SCAN
+local scanning = false
+local function scanFiles()
+    if scanning then return end
+    scanning = true
+
+    for _, c in ipairs(parserScroll:GetChildren()) do
+        if c:IsA("Frame") then c:Destroy() end
+    end
+    for _, c in ipairs(importerScroll:GetChildren()) do
+        if c:IsA("Frame") then c:Destroy() end
+    end
+
+    local files = {}
+    local pathsToTry = {"/sdcard/Download", "/sdcard/Documents", "/sdcard", "workspace", "", ".", "./"}
+    for _, p in ipairs(pathsToTry) do
+        local ok, res = pcall(function() return getFiles(p) end)
+        if ok and type(res) == "table" and #res > 0 then
+            for _, f in ipairs(res) do table.insert(files, f) end
+        end
+    end
+
+    for _, filePath in ipairs(files) do
+        local fileName = filePath:match("[^/\\]+$") or filePath
+        local ext = fileName:match("%.([^%.]+)$")
+        if ext then
+            local e = ext:lower()
+            if e == "rbxm" or e == "rbxmx" then
+                makeFileCard(fileName, e, filePath, parserScroll)
+            elseif e == "rbxl" or e == "rbxlx" then
+                makeFileCard(fileName, e, filePath, importerScroll)
+            end
+        end
+    end
+
+    scanning = false
+end
+
+rescanBtn.MouseButton1Click:Connect(scanFiles)
+
+-- ============================================================
+-- TRANSISI: SPLASH → MAIN
+-- ============================================================
+task.spawn(function()
+    for i = 1, 20 do
+        setSplashProgress(i / 20)
+        task.wait(0.06)
+    end
+    splashStatus.Text = "READY"
+    task.wait(0.4)
+
+    TweenService:Create(splash, TweenInfo.new(0.4), {
+        BackgroundTransparency = 1,
+    }):Play()
+    for _, d in ipairs(splash:GetDescendants()) do
+        if d:IsA("TextLabel") then
+            TweenService:Create(d, TweenInfo.new(0.3), {TextTransparency = 1}):Play()
+        elseif d:IsA("Frame") then
+            TweenService:Create(d, TweenInfo.new(0.3), {BackgroundTransparency = 1}):Play()
+        end
+    end
+    task.wait(0.45)
+
+    splash.Visible = false
+    mainUi.Visible = true
+
+    resetMenus()
+    switchPage("ov", menuOverview)
+    scanFiles()
+end)
