@@ -1,6 +1,7 @@
 --[[ ============================================================
      SADVZE X CUTE — PREMIUM IMPORTER
-     Layout: Forkt Engine style (centered, tab-based)
+     Tahap 1: SPLASH SCREEN (loading)
+     Tahap 2: MAIN UI (sidebar + profile panel)
      Logika load: ALLZ (works di Delta)
      Warna: Merah x Hitam
      ============================================================ ]]
@@ -63,7 +64,7 @@ local function applyRedBorder(target, thickness)
     grad.Parent = target
     if thickness then target.Thickness = thickness end
     RunService.RenderStepped:Connect(function()
-        grad.Rotation = (tick() * 30) % 360
+        grad.Rotation = (tick() * 25) % 360
     end)
 end
 
@@ -127,7 +128,7 @@ local function loadModelFile(filePath)
     return toInsert
 end
 
--- ============ UI ============
+-- ============ ROOT GUI ============
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "SadvzeCuteImporter"
 screenGui.ResetOnSpawn = false
@@ -144,478 +145,439 @@ if not okParent or not screenGui.Parent then
     screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 end
 
--- Toggle
-local toggleIcon = Instance.new("TextButton")
-toggleIcon.Size = UDim2.new(0, 40, 0, 40)
-toggleIcon.Position = UDim2.new(0, 15, 0.5, -20)
-toggleIcon.BackgroundColor3 = COLOR_ACCENT
-toggleIcon.Text = "sxc"
-toggleIcon.TextColor3 = COLOR_TEXT
-toggleIcon.Font = Enum.Font.GothamBold
-toggleIcon.TextSize = 11
-toggleIcon.Active = true
-toggleIcon.Draggable = true
-toggleIcon.Parent = screenGui
-corner(toggleIcon, 20)
+-- ============================================================
+-- TAHAP 1: SPLASH SCREEN
+-- ============================================================
+local splash = Instance.new("Frame")
+splash.Name = "Splash"
+splash.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+splash.Size = UDim2.new(0, 340, 0, 240)
+splash.Position = UDim2.new(0.5, -170, 0.5, -120)
+splash.ZIndex = 100
+splash.Active = true
+splash.Parent = screenGui
+corner(splash, 18)
 
--- ============ MAIN FRAME (FORKT STYLE) ============
-local guiContainer = Instance.new("Frame")
-guiContainer.BackgroundColor3 = COLOR_BG
-guiContainer.Size = UDim2.new(0, 340, 0, 480)
-guiContainer.Position = UDim2.new(0.5, -170, 0.5, -240)
-guiContainer.Active = true
-guiContainer.Draggable = true
-guiContainer.Parent = screenGui
-corner(guiContainer, 18)
+local splashStroke = Instance.new("UIStroke")
+splashStroke.Thickness = 1.5
+splashStroke.Transparency = 0.3
+splashStroke.Parent = splash
+applyRedBorder(splashStroke)
+
+-- Logo
+local splashLogo = Instance.new("Frame")
+splashLogo.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
+splashLogo.Size = UDim2.new(0, 54, 0, 54)
+splashLogo.Position = UDim2.new(0.5, -27, 0, 24)
+splashLogo.ZIndex = 101
+splashLogo.Parent = splash
+corner(splashLogo, 14)
+local slStroke = Instance.new("UIStroke")
+slStroke.Color = COLOR_ACCENT
+slStroke.Thickness = 1.5
+slStroke.Transparency = 0.3
+slStroke.Parent = splashLogo
+makeLabel(splashLogo, "sxc", UDim2.new(1,0,1,0), UDim2.new(0,0,0,0),
+    COLOR_ACCENT_H, Enum.Font.GothamBlack, 15, Enum.TextXAlignment.Center).ZIndex = 102
+
+-- Judul
+makeLabel(splash, "sadvze x cute", UDim2.new(1,0,0,22),
+    UDim2.new(0,0,0,90), COLOR_TEXT, Enum.Font.GothamBlack, 18, Enum.TextXAlignment.Center).ZIndex = 101
+
+-- Subtitle
+makeLabel(splash, "ADVANCED ASSET MANAGEMENT", UDim2.new(1,0,0,12),
+    UDim2.new(0,0,0,114), COLOR_MUTED, Enum.Font.Gotham, 8, Enum.TextXAlignment.Center).ZIndex = 101
+
+-- Status
+local splashStatus = makeLabel(splash, "PARSING WORKSPACE ASSETS...", UDim2.new(1,0,0,12),
+    UDim2.new(0,0,0,142), COLOR_ACCENT_H, Enum.Font.GothamBold, 9, Enum.TextXAlignment.Center)
+splashStatus.ZIndex = 101
+
+-- Progress bar
+local splashBarBg = Instance.new("Frame")
+splashBarBg.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+splashBarBg.Size = UDim2.new(1, -48, 0, 7)
+splashBarBg.Position = UDim2.new(0, 24, 0, 164)
+splashBarBg.ZIndex = 101
+splashBarBg.Parent = splash
+corner(splashBarBg, 4)
+
+local splashBarFill = Instance.new("Frame")
+splashBarFill.BackgroundColor3 = COLOR_ACCENT
+splashBarFill.Size = UDim2.new(0, 0, 1, 0)
+splashBarFill.ZIndex = 102
+splashBarFill.Parent = splashBarBg
+corner(splashBarFill, 4)
+local sbGrad = Instance.new("UIGradient")
+sbGrad.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 60, 80)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 130, 150)),
+})
+sbGrad.Parent = splashBarFill
+
+local splashPercent = makeLabel(splash, "0%", UDim2.new(0.5,0,0,12),
+    UDim2.new(0, 24, 0, 178), COLOR_MUTED, Enum.Font.GothamBold, 9)
+
+local splashVersion = makeLabel(splash, "v1.0 PRO", UDim2.new(0.5,-24,0,12),
+    UDim2.new(0.5,0,0,178), COLOR_MUTED, Enum.Font.GothamBold, 9, Enum.TextXAlignment.Right)
+
+-- Tab nav bawah
+local splashTabs = Instance.new("Frame")
+splashTabs.BackgroundTransparency = 1
+splashTabs.Size = UDim2.new(1, -48, 0, 20)
+splashTabs.Position = UDim2.new(0, 24, 0, 202)
+splashTabs.ZIndex = 101
+splashTabs.Parent = splash
+
+local function makeSplashTab(text, posX)
+    local dot = Instance.new("Frame")
+    dot.Size = UDim2.new(0, 5, 0, 5)
+    dot.Position = UDim2.new(0, posX, 0.5, -2)
+    dot.BackgroundColor3 = COLOR_DIM
+    dot.ZIndex = 102
+    dot.Parent = splashTabs
+    corner(dot, 3)
+    local lbl = makeLabel(splashTabs, text, UDim2.new(0, 70, 1, 0),
+        UDim2.new(0, posX + 9, 0, 0), COLOR_DIM, Enum.Font.GothamBold, 9)
+    lbl.ZIndex = 102
+    return {dot = dot, lbl = lbl}
+end
+
+local sTab1 = makeSplashTab("CORE", 20)
+local sTab2 = makeSplashTab("PARSER", 110)
+local sTab3 = makeSplashTab("IMPORTER", 200)
+
+local function setSplashProgress(p)
+    p = math.clamp(p, 0, 1)
+    splashBarFill.Size = UDim2.new(p, 0, 1, 0)
+    splashPercent.Text = math.floor(p * 100) .. "%"
+
+    -- Highlight tab berdasarkan progress
+    local map = {
+        {tab = sTab1, threshold = 0.33},
+        {tab = sTab2, threshold = 0.66},
+        {tab = sTab3, threshold = 1.0},
+    }
+    for i, m in ipairs(map) do
+        local prevThreshold = (i == 1) and 0 or map[i-1].threshold
+        local active = p >= prevThreshold and p <= m.threshold + 0.01
+        local done = p > m.threshold
+        if active or done then
+            m.tab.dot.BackgroundColor3 = COLOR_ACCENT
+            m.tab.lbl.TextColor3 = COLOR_TEXT
+        else
+            m.tab.dot.BackgroundColor3 = COLOR_DIM
+            m.tab.lbl.TextColor3 = COLOR_DIM
+        end
+    end
+end
+
+-- ============================================================
+-- TAHAP 2: MAIN UI
+-- ============================================================
+local mainUi = Instance.new("Frame")
+mainUi.Name = "MainUI"
+mainUi.BackgroundColor3 = COLOR_BG
+mainUi.Size = UDim2.new(0, 560, 0, 340)
+mainUi.Position = UDim2.new(0.5, -280, 0.5, -170)
+mainUi.Active = true
+mainUi.Draggable = true
+mainUi.Visible = false
+mainUi.ZIndex = 50
+mainUi.Parent = screenGui
+corner(mainUi, 16)
 
 local mainStroke = Instance.new("UIStroke")
 mainStroke.Thickness = 1.5
 mainStroke.Transparency = 0.3
-mainStroke.Parent = guiContainer
+mainStroke.Parent = mainUi
 applyRedBorder(mainStroke)
 
--- Close (pojok kanan atas)
-local closeBtn = Instance.new("TextButton")
-closeBtn.Text = "✕"
-closeBtn.Font = Enum.Font.GothamBold
-closeBtn.TextSize = 11
-closeBtn.TextColor3 = COLOR_MUTED
-closeBtn.BackgroundColor3 = COLOR_SURFACE_2
-closeBtn.Size = UDim2.new(0, 24, 0, 24)
-closeBtn.Position = UDim2.new(1, -32, 0, 10)
-closeBtn.ZIndex = 5
-closeBtn.Parent = guiContainer
-corner(closeBtn, 6)
-closeBtn.MouseButton1Click:Connect(function() guiContainer.Visible = false end)
+-- ============ SIDEBAR KIRI ============
+local sidebar = Instance.new("Frame")
+sidebar.BackgroundColor3 = Color3.fromRGB(12, 12, 16)
+sidebar.Size = UDim2.new(0, 150, 1, 0)
+sidebar.ZIndex = 51
+sidebar.Parent = mainUi
+corner(sidebar, 16)
+-- mask kanan biar cuma kiri rounded
+local sidebarMask = Instance.new("Frame")
+sidebarMask.BackgroundColor3 = Color3.fromRGB(12, 12, 16)
+sidebarMask.BorderSizePixel = 0
+sidebarMask.Size = UDim2.new(0, 16, 1, 0)
+sidebarMask.Position = UDim2.new(1, -16, 0, 0)
+sidebarMask.ZIndex = 51
+sidebarMask.Parent = sidebar
 
-toggleIcon.MouseButton1Click:Connect(function()
-    guiContainer.Visible = not guiContainer.Visible
-end)
+-- Logo sidebar
+local sbLogo = Instance.new("Frame")
+sbLogo.BackgroundColor3 = COLOR_SURFACE_2
+sbLogo.Size = UDim2.new(0, 34, 0, 34)
+sbLogo.Position = UDim2.new(0, 14, 0, 14)
+sbLogo.ZIndex = 52
+sbLogo.Parent = sidebar
+corner(sbLogo, 10)
+local sbLogoStroke = Instance.new("UIStroke")
+sbLogoStroke.Color = COLOR_ACCENT
+sbLogoStroke.Thickness = 1
+sbLogoStroke.Transparency = 0.4
+sbLogoStroke.Parent = sbLogo
+makeLabel(sbLogo, "sxc", UDim2.new(1,0,1,0), UDim2.new(0,0,0,0),
+    COLOR_ACCENT_H, Enum.Font.GothamBlack, 10, Enum.TextXAlignment.Center).ZIndex = 53
 
--- ============ HEADER (CENTERED) ============
--- Logo kotak
-local logoBox = Instance.new("Frame")
-logoBox.BackgroundColor3 = COLOR_SURFACE_2
-logoBox.Size = UDim2.new(0, 56, 0, 56)
-logoBox.Position = UDim2.new(0.5, -28, 0, 24)
-logoBox.ZIndex = 3
-logoBox.Parent = guiContainer
-corner(logoBox, 14)
+makeLabel(sidebar, "sadvze x cute", UDim2.new(1,-56,0,14),
+    UDim2.new(0, 54, 0, 18), COLOR_TEXT, Enum.Font.GothamBold, 10).ZIndex = 52
+makeLabel(sidebar, "v1.0 PRO", UDim2.new(1,-56,0,12),
+    UDim2.new(0, 54, 0, 32), COLOR_MUTED, Enum.Font.Gotham, 8).ZIndex = 52
 
-local logoStroke = Instance.new("UIStroke")
-logoStroke.Color = COLOR_ACCENT
-logoStroke.Thickness = 1.5
-logoStroke.Transparency = 0.3
-logoStroke.Parent = logoBox
+-- Divider
+local sbDiv = Instance.new("Frame")
+sbDiv.BackgroundColor3 = COLOR_SURFACE_2
+sbDiv.Size = UDim2.new(1, -24, 0, 1)
+sbDiv.Position = UDim2.new(0, 12, 0, 62)
+sbDiv.ZIndex = 52
+sbDiv.Parent = sidebar
 
-makeLabel(logoBox, "sxc", UDim2.new(1,0,1,0), UDim2.new(0,0,0,0),
-    COLOR_ACCENT_H, Enum.Font.GothamBlack, 16, Enum.TextXAlignment.Center).ZIndex = 4
+-- Menu items
+local menuItems = {}
+local function makeMenuItem(text, posY, icon)
+    local row = Instance.new("Frame")
+    row.BackgroundColor3 = COLOR_BG
+    row.BackgroundTransparency = 1
+    row.Size = UDim2.new(1, -20, 0, 30)
+    row.Position = UDim2.new(0, 10, 0, posY)
+    row.ZIndex = 52
+    row.Parent = sidebar
+    corner(row, 7)
 
--- Judul besar
-makeLabel(guiContainer, "sadvze x cute", UDim2.new(1,0,0,24),
-    UDim2.new(0,0,0,90), COLOR_TEXT, Enum.Font.GothamBlack, 18, Enum.TextXAlignment.Center)
+    local ico = makeLabel(row, icon, UDim2.new(0, 20, 1, 0),
+        UDim2.new(0, 10, 0, 0), COLOR_MUTED, Enum.Font.GothamBold, 11)
+    ico.ZIndex = 53
 
--- Subtitle
-makeLabel(guiContainer, "ADVANCED ASSET IMPORTER", UDim2.new(1,0,0,14),
-    UDim2.new(0,0,0,116), COLOR_MUTED, Enum.Font.Gotham, 9, Enum.TextXAlignment.Center)
+    local lbl = makeLabel(row, text, UDim2.new(1, -34, 1, 0),
+        UDim2.new(0, 32, 0, 0), COLOR_MUTED, Enum.Font.GothamMedium, 10)
+    lbl.ZIndex = 53
 
--- Status text
-local statusText = makeLabel(guiContainer, "IDLE", UDim2.new(1,0,0,14),
-    UDim2.new(0,0,0,146), COLOR_ACCENT_H, Enum.Font.GothamBold, 10, Enum.TextXAlignment.Center)
-
--- Progress bar
-local progressBg = Instance.new("Frame")
-progressBg.BackgroundColor3 = COLOR_SURFACE
-progressBg.Size = UDim2.new(1, -48, 0, 8)
-progressBg.Position = UDim2.new(0, 24, 0, 168)
-progressBg.ZIndex = 3
-progressBg.Parent = guiContainer
-corner(progressBg, 4)
-
-local progressFill = Instance.new("Frame")
-progressFill.BackgroundColor3 = COLOR_ACCENT
-progressFill.Size = UDim2.new(0, 0, 1, 0)
-progressFill.ZIndex = 4
-progressFill.Parent = progressBg
-corner(progressFill, 4)
-
-local progressGrad = Instance.new("UIGradient")
-progressGrad.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 60, 80)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 120, 140)),
-})
-progressGrad.Parent = progressFill
-
-local percentLabel = makeLabel(guiContainer, "0%", UDim2.new(0.5,0,0,12),
-    UDim2.new(0, 24, 0, 182), COLOR_MUTED, Enum.Font.GothamBold, 9)
-
-local versionLabel = makeLabel(guiContainer, "v1.0 PRO", UDim2.new(0.5,-24,0,12),
-    UDim2.new(0.5,0,0,182), COLOR_MUTED, Enum.Font.GothamBold, 9, Enum.TextXAlignment.Right)
-
-local function setProgress(p)
-    p = math.clamp(p, 0, 1)
-    TweenService:Create(progressFill, TweenInfo.new(0.3), {
-        Size = UDim2.new(p, 0, 1, 0),
-    }):Play()
-    percentLabel.Text = math.floor(p * 100) .. "%"
-end
-
--- ============ TAB NAV ============
-local tabRow = Instance.new("Frame")
-tabRow.BackgroundTransparency = 1
-tabRow.Size = UDim2.new(1, -48, 0, 24)
-tabRow.Position = UDim2.new(0, 24, 0, 206)
-tabRow.ZIndex = 3
-tabRow.Parent = guiContainer
-
-local function makeTab(text, posX, width)
-    local dot = Instance.new("Frame")
-    dot.Size = UDim2.new(0, 6, 0, 6)
-    dot.Position = UDim2.new(0, posX, 0.5, -3)
-    dot.BackgroundColor3 = COLOR_DIM
-    dot.ZIndex = 4
-    dot.Parent = tabRow
-    corner(dot, 3)
-
-    local lbl = makeLabel(tabRow, text, UDim2.new(0, width, 1, 0),
-        UDim2.new(0, posX + 10, 0, 0), COLOR_DIM, Enum.Font.GothamBold, 10)
-    lbl.ZIndex = 4
-
-    return {dot = dot, lbl = lbl}
-end
-
-local tabCore     = makeTab("CORE",     10,  70)
-local tabParser   = makeTab("PARSER",   110, 70)
-local tabImporter = makeTab("IMPORTER", 210, 80)
-
-local function setActiveTab(active)
-    local map = {CORE = tabCore, PARSER = tabParser, IMPORTER = tabImporter}
-    for name, t in pairs(map) do
-        local on = (name == active)
-        t.dot.BackgroundColor3 = on and COLOR_ACCENT or COLOR_DIM
-        t.lbl.TextColor3 = on and COLOR_TEXT or COLOR_DIM
+    local function setActive(on)
+        if on then
+            row.BackgroundTransparency = 0
+            row.BackgroundColor3 = COLOR_ACCENT
+            ico.TextColor3 = COLOR_TEXT
+            lbl.TextColor3 = COLOR_TEXT
+            lbl.Font = Enum.Font.GothamBold
+        else
+            row.BackgroundTransparency = 1
+            ico.TextColor3 = COLOR_MUTED
+            lbl.TextColor3 = COLOR_MUTED
+            lbl.Font = Enum.Font.GothamMedium
+        end
     end
+
+    return {row = row, lbl = lbl, ico = ico, setActive = setActive}
 end
 
--- ============ CONTENT AREA ============
-local contentArea = Instance.new("Frame")
-contentArea.BackgroundColor3 = COLOR_SURFACE
-contentArea.Size = UDim2.new(1, -32, 1, -274)
-contentArea.Position = UDim2.new(0, 16, 0, 244)
-contentArea.ZIndex = 3
-contentArea.Parent = guiContainer
-corner(contentArea, 10)
+local menuOverview = makeMenuItem("Overview", 74, "◈")
+local menuParser   = makeMenuItem("Parser",   108, "▣")
+local menuImporter = makeMenuItem("Importer", 142, "⚡")
+local menuSettings = makeMenuItem("Settings", 176, "⚙")
 
-local contentStroke = Instance.new("UIStroke")
-contentStroke.Color = Color3.fromRGB(40, 40, 50)
-contentStroke.Thickness = 1
-contentStroke.Parent = contentArea
+-- Divider
+local sbDiv2 = Instance.new("Frame")
+sbDiv2.BackgroundColor3 = COLOR_SURFACE_2
+sbDiv2.Size = UDim2.new(1, -24, 0, 1)
+sbDiv2.Position = UDim2.new(0, 12, 1, -94)
+sbDiv2.ZIndex = 52
+sbDiv2.Parent = sidebar
 
--- ---- PAGE 1: CORE ----
-local pageCore = Instance.new("Frame")
-pageCore.BackgroundTransparency = 1
-pageCore.Size = UDim2.new(1, 0, 1, 0)
-pageCore.ZIndex = 4
-pageCore.Parent = contentArea
+makeLabel(sidebar, "QUICK TOOLS", UDim2.new(1,-24,0,12),
+    UDim2.new(0, 14, 1, -82), COLOR_DIM, Enum.Font.GothamBold, 8).ZIndex = 52
 
-makeLabel(pageCore, "WORKSPACE STATUS", UDim2.new(1,-24,0,16),
-    UDim2.new(0,12,0,14), COLOR_TEXT, Enum.Font.GothamBold, 10)
+local rescanBtn = Instance.new("TextButton")
+rescanBtn.Text = "⟳  Rescan Assets"
+rescanBtn.Font = Enum.Font.GothamBold
+rescanBtn.TextSize = 9
+rescanBtn.TextColor3 = COLOR_TEXT
+rescanBtn.BackgroundColor3 = COLOR_SURFACE_2
+rescanBtn.Size = UDim2.new(1, -24, 0, 30)
+rescanBtn.Position = UDim2.new(0, 12, 1, -66)
+rescanBtn.ZIndex = 53
+rescanBtn.Parent = sidebar
+corner(rescanBtn, 7)
 
-local statBox1 = Instance.new("Frame")
-statBox1.BackgroundColor3 = COLOR_BG
-statBox1.Size = UDim2.new(0.5, -18, 0, 50)
-statBox1.Position = UDim2.new(0, 12, 0, 38)
-statBox1.ZIndex = 5
-statBox1.Parent = pageCore
-corner(statBox1, 8)
+-- ============ MAIN PANEL KANAN ============
+local mainPanel = Instance.new("Frame")
+mainPanel.BackgroundTransparency = 1
+mainPanel.Size = UDim2.new(1, -150, 1, 0)
+mainPanel.Position = UDim2.new(0, 150, 0, 0)
+mainPanel.ZIndex = 51
+mainPanel.Parent = mainUi
 
-makeLabel(statBox1, "RBXM", UDim2.new(1,0,0,14),
-    UDim2.new(0,10,0,8), COLOR_MUTED, Enum.Font.Gotham, 9)
-local countRbxm = makeLabel(statBox1, "0", UDim2.new(1,0,0,20),
-    UDim2.new(0,10,0,24), COLOR_RBXM, Enum.Font.GothamBlack, 16)
+-- Header
+makeLabel(mainPanel, "System Profile", UDim2.new(0.6,0,0,18),
+    UDim2.new(0, 18, 0, 14), COLOR_TEXT, Enum.Font.GothamBold, 13).ZIndex = 52
 
-local statBox2 = Instance.new("Frame")
-statBox2.BackgroundColor3 = COLOR_BG
-statBox2.Size = UDim2.new(0.5, -18, 0, 50)
-statBox2.Position = UDim2.new(0.5, 6, 0, 38)
-statBox2.ZIndex = 5
-statBox2.Parent = pageCore
-corner(statBox2, 8)
+local closeMain = Instance.new("TextButton")
+closeMain.Text = "✕"
+closeMain.Font = Enum.Font.GothamBold
+closeMain.TextSize = 10
+closeMain.TextColor3 = COLOR_MUTED
+closeMain.BackgroundColor3 = COLOR_SURFACE_2
+closeMain.Size = UDim2.new(0, 24, 0, 24)
+closeMain.Position = UDim2.new(1, -36, 0, 12)
+closeMain.ZIndex = 53
+closeMain.Parent = mainPanel
+corner(closeMain, 6)
+closeMain.MouseButton1Click:Connect(function() mainUi.Visible = false end)
 
-makeLabel(statBox2, "RBXL", UDim2.new(1,0,0,14),
-    UDim2.new(0,10,0,8), COLOR_MUTED, Enum.Font.Gotham, 9)
-local countRbxl = makeLabel(statBox2, "0", UDim2.new(1,0,0,20),
-    UDim2.new(0,10,0,24), COLOR_RBXL, Enum.Font.GothamBlack, 16)
+-- ============ PAGE CONTAINER ============
+local pages = Instance.new("Frame")
+pages.BackgroundTransparency = 1
+pages.Size = UDim2.new(1, -24, 1, -50)
+pages.Position = UDim2.new(0, 12, 0, 44)
+pages.ZIndex = 52
+pages.Parent = mainPanel
 
-local scanBtn = Instance.new("TextButton")
-scanBtn.Text = "SCAN WORKSPACE"
-scanBtn.Font = Enum.Font.GothamBold
-scanBtn.TextSize = 11
-scanBtn.TextColor3 = COLOR_TEXT
-scanBtn.BackgroundColor3 = COLOR_ACCENT
-scanBtn.Size = UDim2.new(1, -24, 0, 36)
-scanBtn.Position = UDim2.new(0, 12, 1, -50)
-scanBtn.ZIndex = 5
-scanBtn.Parent = pageCore
-corner(scanBtn, 8)
+-- PAGE: OVERVIEW (profile card)
+local pageOverview = Instance.new("Frame")
+pageOverview.BackgroundTransparency = 1
+pageOverview.Size = UDim2.new(1, 0, 1, 0)
+pageOverview.ZIndex = 52
+pageOverview.Parent = pages
 
-local statusLog = makeLabel(pageCore, "> Ready.", UDim2.new(1,-24,0,14),
-    UDim2.new(0,12,1,-68), COLOR_MUTED, Enum.Font.Code, 9)
-statusLog.TextTruncate = Enum.TextTruncate.AtEnd
+-- Profile card
+local profileCard = Instance.new("Frame")
+profileCard.BackgroundColor3 = COLOR_SURFACE
+profileCard.Size = UDim2.new(1, 0, 0, 62)
+profileCard.ZIndex = 53
+profileCard.Parent = pageOverview
+corner(profileCard, 10)
+local pcStroke = Instance.new("UIStroke")
+pcStroke.Color = Color3.fromRGB(40, 40, 50)
+pcStroke.Thickness = 1
+pcStroke.Parent = profileCard
 
--- ---- PAGE 2: PARSER ----
+local avCircle = Instance.new("Frame")
+avCircle.BackgroundColor3 = COLOR_ACCENT
+avCircle.Size = UDim2.new(0, 40, 0, 40)
+avCircle.Position = UDim2.new(0, 12, 0.5, -20)
+avCircle.ZIndex = 54
+avCircle.Parent = profileCard
+corner(avCircle, 20)
+local avStroke2 = Instance.new("UIStroke")
+avStroke2.Color = COLOR_ACCENT_H
+avStroke2.Thickness = 1.5
+avStroke2.Transparency = 0.3
+avStroke2.Parent = avCircle
+
+local nameLbl = makeLabel(profileCard, LocalPlayer.DisplayName or LocalPlayer.Name,
+    UDim2.new(1, -80, 0, 16), UDim2.new(0, 62, 0, 12),
+    COLOR_TEXT, Enum.Font.GothamBold, 12)
+nameLbl.ZIndex = 54
+
+local userLbl = makeLabel(profileCard, "@" .. LocalPlayer.Name .. "  ·  ID " .. tostring(LocalPlayer.UserId),
+    UDim2.new(1, -80, 0, 12), UDim2.new(0, 62, 0, 30),
+    COLOR_MUTED, Enum.Font.Gotham, 8)
+userLbl.ZIndex = 54
+
+-- Grid cards
+local card1 = Instance.new("Frame")
+card1.BackgroundColor3 = COLOR_SURFACE
+card1.Size = UDim2.new(0.5, -6, 0, 50)
+card1.Position = UDim2.new(0, 0, 0, 70)
+card1.ZIndex = 53
+card1.Parent = pageOverview
+corner(card1, 10)
+local c1Stroke = Instance.new("UIStroke")
+c1Stroke.Color = Color3.fromRGB(40, 40, 50)
+c1Stroke.Thickness = 1
+c1Stroke.Parent = card1
+
+makeLabel(card1, "Trial Access", UDim2.new(1,-16,0,14),
+    UDim2.new(0, 12, 0, 8), COLOR_TEXT, Enum.Font.GothamBold, 10).ZIndex = 54
+makeLabel(card1, "Status Access", UDim2.new(1,-16,0,12),
+    UDim2.new(0, 12, 0, 26), COLOR_MUTED, Enum.Font.Gotham, 8).ZIndex = 54
+
+local card2 = Instance.new("Frame")
+card2.BackgroundColor3 = COLOR_SURFACE
+card2.Size = UDim2.new(0.5, -6, 0, 50)
+card2.Position = UDim2.new(0.5, 6, 0, 70)
+card2.ZIndex = 53
+card2.Parent = pageOverview
+corner(card2, 10)
+local c2Stroke = Instance.new("UIStroke")
+c2Stroke.Color = Color3.fromRGB(40, 40, 50)
+c2Stroke.Thickness = 1
+c2Stroke.Parent = card2
+
+makeLabel(card2, "Studio Lite", UDim2.new(1,-16,0,14),
+    UDim2.new(0, 12, 0, 8), COLOR_TEXT, Enum.Font.GothamBold, 10).ZIndex = 54
+makeLabel(card2, "Core Engine", UDim2.new(1,-16,0,12),
+    UDim2.new(0, 12, 0, 26), COLOR_MUTED, Enum.Font.Gotham, 8).ZIndex = 54
+
+-- Wide card
+local card3 = Instance.new("Frame")
+card3.BackgroundColor3 = COLOR_SURFACE
+card3.Size = UDim2.new(1, 0, 0, 50)
+card3.Position = UDim2.new(0, 0, 0, 128)
+card3.ZIndex = 53
+card3.Parent = pageOverview
+corner(card3, 10)
+local c3Stroke = Instance.new("UIStroke")
+c3Stroke.Color = Color3.fromRGB(40, 40, 50)
+c3Stroke.Thickness = 1
+c3Stroke.Parent = card3
+
+local c3Logo = Instance.new("Frame")
+c3Logo.BackgroundColor3 = COLOR_ACCENT
+c3Logo.Size = UDim2.new(0, 30, 0, 30)
+c3Logo.Position = UDim2.new(0, 12, 0.5, -15)
+c3Logo.ZIndex = 54
+c3Logo.Parent = card3
+corner(c3Logo, 8)
+makeLabel(c3Logo, "s", UDim2.new(1,0,1,0), UDim2.new(0,0,0,0),
+    COLOR_TEXT, Enum.Font.GothamBlack, 13, Enum.TextXAlignment.Center).ZIndex = 55
+
+makeLabel(card3, "sadvze x cute", UDim2.new(1,-80,0,14),
+    UDim2.new(0, 52, 0, 8), COLOR_TEXT, Enum.Font.GothamBold, 10).ZIndex = 54
+makeLabel(card3, "Developed by LO 🖤", UDim2.new(1,-80,0,12),
+    UDim2.new(0, 52, 0, 26), COLOR_MUTED, Enum.Font.Gotham, 8).ZIndex = 54
+
+-- PAGE: PARSER (rbxm list)
 local pageParser = Instance.new("Frame")
 pageParser.BackgroundTransparency = 1
 pageParser.Size = UDim2.new(1, 0, 1, 0)
 pageParser.Visible = false
-pageParser.ZIndex = 4
-pageParser.Parent = contentArea
+pageParser.ZIndex = 52
+pageParser.Parent = pages
 
-makeLabel(pageParser, "PARSED FILES", UDim2.new(1,-24,0,16),
-    UDim2.new(0,12,0,14), COLOR_TEXT, Enum.Font.GothamBold, 10)
+makeLabel(pageParser, "Parsed RBXM Files", UDim2.new(1,-16,0,16),
+    UDim2.new(0, 4, 0, 0), COLOR_TEXT, Enum.Font.GothamBold, 11).ZIndex = 53
 
 local parserScroll = Instance.new("ScrollingFrame")
 parserScroll.BackgroundTransparency = 1
-parserScroll.Position = UDim2.new(0, 12, 0, 36)
-parserScroll.Size = UDim2.new(1, -24, 1, -48)
+parserScroll.Position = UDim2.new(0, 0, 0, 22)
+parserScroll.Size = UDim2.new(1, 0, 1, -22)
 parserScroll.CanvasSize = UDim2.new(0,0,0,0)
 parserScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 parserScroll.ScrollBarThickness = 3
 parserScroll.ScrollBarImageColor3 = COLOR_ACCENT
-parserScroll.ZIndex = 5
+parserScroll.ZIndex = 53
 parserScroll.Parent = pageParser
+make("UIListLayout", {Padding = UDim.new(0, 6), Parent = parserScroll}) -- placeholder
 
 local parserLayout = Instance.new("UIListLayout")
-parserLayout.Padding = UDim.new(0, 5)
+parserLayout.Padding = UDim.new(0, 6)
 parserLayout.Parent = parserScroll
 
--- ---- PAGE 3: IMPORTER ----
+-- PAGE: IMPORTER (rbxl list)
 local pageImporter = Instance.new("Frame")
 pageImporter.BackgroundTransparency = 1
 pageImporter.Size = UDim2.new(1, 0, 1, 0)
 pageImporter.Visible = false
-pageImporter.ZIndex = 4
-pageImporter.Parent = contentArea
+pageImporter.ZIndex = 52
+pageImporter.Parent = pages
 
-makeLabel(pageImporter, "ASSET TABLE", UDim2.new(1,-24,0,16),
-    UDim2.new(0,12,0,14), COLOR_TEXT, Enum.Font.GothamBold, 10)
+makeLabel(pageImporter, "Importer RBXL Places", UDim2.new(1,-16,0,16),
+    UDim2.new(0, 4, 0, 0), COLOR_TEXT, Enum.Font.GothamBold, 11).ZIndex = 53
 
-local importerScroll = Instance.new("ScrollingFrame")
-importerScroll.BackgroundTransparency = 1
-importerScroll.Position = UDim2.new(0, 12, 0, 36)
-importerScroll.Size = UDim2.new(1, -24, 1, -48)
-importerScroll.CanvasSize = UDim2.new(0,0,0,0)
-importerScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-importerScroll.ScrollBarThickness = 3
-importerScroll.ScrollBarImageColor3 = COLOR_ACCENT
-importerScroll.ZIndex = 5
-importerScroll.Parent = pageImporter
-
-local importerLayout = Instance.new("UIListLayout")
-importerLayout.Padding = UDim.new(0, 5)
-importerLayout.Parent = importerScroll
-
--- ============ TAB SWITCHING ============
-local function switchTab(name)
-    setActiveTab(name)
-    pageCore.Visible     = (name == "CORE")
-    pageParser.Visible   = (name == "PARSER")
-    pageImporter.Visible = (name == "IMPORTER")
-end
-
-tabCore.dot.Parent.MouseButton1Click = nil -- placeholder
-for _, t in ipairs({
-    {tab = tabCore, name = "CORE"},
-    {tab = tabParser, name = "PARSER"},
-    {tab = tabImporter, name = "IMPORTER"},
-}) do
-    t.tab.lbl.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1
-        or input.UserInputType == Enum.UserInputType.Touch then
-            switchTab(t.name)
-        end
-    end)
-    t.tab.dot.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1
-        or input.UserInputType == Enum.UserInputType.Touch then
-            switchTab(t.name)
-        end
-    end)
-end
-
--- ============ FILE LIST RENDER ============
-local foundFiles = {}
-
-local function makeFileCard(fileName, fileExt, filePath, parentFrame)
-    local isRbxm = (fileExt == "rbxm" or fileExt == "rbxmx")
-    local extColor = isRbxm and COLOR_RBXM or COLOR_RBXL
-
-    local card = Instance.new("Frame")
-    card.BackgroundColor3 = COLOR_BG
-    card.Size = UDim2.new(1, -4, 0, 60)
-    card.ZIndex = 6
-    card.Parent = parentFrame
-    corner(card, 8)
-
-    local badge = Instance.new("TextButton")
-    badge.Text = string.upper(fileExt)
-    badge.Font = Enum.Font.GothamBold
-    badge.TextSize = 7
-    badge.TextColor3 = COLOR_TEXT
-    badge.BackgroundColor3 = extColor
-    badge.Size = UDim2.new(0, 40, 0, 15)
-    badge.Position = UDim2.new(0, 8, 0, 7)
-    badge.ZIndex = 7
-    badge.AutoButtonColor = false
-    badge.Parent = card
-    corner(badge, 4)
-
-    local importBtn = Instance.new("TextButton")
-    importBtn.Text = "IMPORT"
-    importBtn.Font = Enum.Font.GothamBold
-    importBtn.TextSize = 7
-    importBtn.TextColor3 = COLOR_TEXT
-    importBtn.BackgroundColor3 = extColor
-    importBtn.Size = UDim2.new(0, 54, 0, 18)
-    importBtn.Position = UDim2.new(1, -62, 0, 7)
-    importBtn.ZIndex = 7
-    importBtn.Parent = card
-    corner(importBtn, 4)
-
-    makeLabel(card, fileName, UDim2.new(1,-80,0,12),
-        UDim2.new(0,8,0,26), COLOR_TEXT, Enum.Font.GothamBold, 8).ZIndex = 7
-
-    makeLabel(card, filePath, UDim2.new(1,-16,0,10),
-        UDim2.new(0,8,0,44), COLOR_MUTED, Enum.Font.Code, 7).ZIndex = 7
-
-    importBtn.MouseButton1Click:Connect(function()
-        importBtn.Text = "..."
-        statusText.Text = "LOADING " .. string.upper(fileName)
-        setProgress(0.5)
-
-        local loadedObjects = loadModelFile(filePath)
-        local okCount = 0
-
-        if loadedObjects and #loadedObjects > 0 then
-            for _, obj in ipairs(loadedObjects) do
-                local okP = pcall(function() obj.Parent = Workspace end)
-                if okP then
-                    processModelParts(obj)
-                    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                        local hrp = LocalPlayer.Character.HumanoidRootPart
-                        local cf = hrp.CFrame + (hrp.CFrame.LookVector * 6)
-                        if obj:IsA("Model") and obj.PrimaryPart then
-                            pcall(function() obj:SetPrimaryPartCFrame(cf) end)
-                        elseif obj:IsA("BasePart") then
-                            obj.CFrame = cf
-                        end
-                    end
-                    processModelParts(obj)
-                    refreshScripts(obj)
-                    okCount = okCount + 1
-                end
-            end
-
-            setProgress(1)
-            statusText.Text = "IMPORTED " .. okCount .. " OBJECTS"
-            importBtn.Text = "✓ DONE"
-            importBtn.BackgroundColor3 = COLOR_SUCCESS
-            statusLog.Text = "> OK: " .. fileName
-        else
-            setProgress(0)
-            statusText.Text = "IMPORT FAILED"
-            importBtn.Text = "✗ FAIL"
-            importBtn.BackgroundColor3 = COLOR_DANGER
-            statusLog.Text = "> FAIL: " .. fileName
-        end
-
-        task.delay(2, function()
-            setProgress(0)
-            statusText.Text = "IDLE"
-        end)
-    end)
-
-    return card
-end
-
--- ============ SCAN ============
-local scanning = false
-
-local function scanFiles()
-    if scanning then return end
-    scanning = true
-
-    for _, c in ipairs(parserScroll:GetChildren()) do
-        if c:IsA("Frame") then c:Destroy() end
-    end
-    for _, c in ipairs(importerScroll:GetChildren()) do
-        if c:IsA("Frame") then c:Destroy() end
-    end
-    foundFiles = {}
-
-    scanBtn.Text = "SCANNING..."
-    statusText.Text = "PARSING WORKSPACE ASSETS..."
-    statusLog.Text = "> Scanning file..."
-    setProgress(0.1)
-
-    task.wait(0.2)
-
-    local files = {}
-    local pathsToTry = {
-        "/sdcard/Download", "/sdcard/Documents", "/sdcard",
-        "workspace", "", ".", "./"
-    }
-    for i, p in ipairs(pathsToTry) do
-        setProgress(0.1 + (i / #pathsToTry) * 0.6)
-        local ok, res = pcall(function() return getFiles(p) end)
-        if ok and type(res) == "table" and #res > 0 then
-            for _, f in ipairs(res) do table.insert(files, f) end
-        end
-        task.wait(0.05)
-    end
-
-    setProgress(0.8)
-
-    local rbxmCount, rbxlCount = 0, 0
-    for _, filePath in ipairs(files) do
-        local fileName = filePath:match("[^/\\]+$") or filePath
-        local ext = fileName:match("%.([^%.]+)$")
-        if ext then
-            local e = ext:lower()
-            if e == "rbxm" or e == "rbxmx" then
-                rbxmCount = rbxmCount + 1
-                local card = makeFileCard(fileName, e, filePath, parserScroll)
-                table.insert(foundFiles, {row = card, name = fileName, ext = e})
-            elseif e == "rbxl" or e == "rbxlx" then
-                rbxlCount = rbxlCount + 1
-                local card = makeFileCard(fileName, e, filePath, importerScroll)
-                table.insert(foundFiles, {row = card, name = fileName, ext = e})
-            end
-        end
-    end
-
-    countRbxm.Text = tostring(rbxmCount)
-    countRbxl.Text = tostring(rbxlCount)
-
-    setProgress(1)
-    scanBtn.Text = "SCAN WORKSPACE"
-    statusText.Text = "SCAN COMPLETE"
-    statusLog.Text = string.format("> Found %d rbxm, %d rbxl", rbxmCount, rbxlCount)
-
-    task.delay(2, function()
-        setProgress(0)
-        statusText.Text = "IDLE"
-    end)
-
-    scanning = false
-end
-
-scanBtn.MouseButton1Click:Connect(scanFiles)
-
--- start
-switchTab("CORE")
-statusLog.Text = "> Ready. Press SCAN WORKSPACE."
-task.spawn(function()
-    task.wait(0.8)
-    scanFiles()
-end)
+local importerScroll = Instance
