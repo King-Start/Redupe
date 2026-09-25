@@ -1,7 +1,6 @@
 --[[ ============================================================
-     SADVZE X CUTE — PREMIUM IMPORTER (FULL)
-     Splash + Main UI + Toggle + Gradient + Vortex Border
-     Logika load: ALLZ
+     SADVZE X CUTE — PREMIUM IMPORTER
+     Full Edition + Support RBXL
      ============================================================ ]]
 
 local CoreGui       = game:GetService("CoreGui")
@@ -28,6 +27,21 @@ local COLOR_RBXM      = Color3.fromRGB(180, 60, 90)
 local COLOR_RBXL      = Color3.fromRGB(220, 40, 60)
 local COLOR_SUCCESS   = Color3.fromRGB(90, 220, 140)
 local COLOR_DANGER    = Color3.fromRGB(255, 60, 60)
+
+local SERVICE_NAMES = {
+    Workspace=true, Lighting=true, Players=true, ReplicatedFirst=true,
+    ReplicatedStorage=true, ServerScriptService=true, ServerStorage=true,
+    StarterGui=true, StarterPack=true, StarterPlayer=true, Teams=true,
+    SoundService=true, Chat=true, TimerService=true, CoreGui=true,
+    UserInputService=true, HttpService=true, InsertService=true,
+    LocalizationService=true, ScriptContext=true, LogService=true,
+    GuiService=true, ContentProvider=true, MarketplaceService=true,
+    CollectionService=true, PhysicsService=true, PathfindingService=true,
+    TestService=true, BadgeService=true, GroupService=true,
+    TeleportService=true, AssetService=true, MemoryStoreService=true,
+    DataStoreService=true, PolicyService=true, ProximityPromptService=true,
+    TextChatService=true, VoiceChatService=true,
+}
 
 local function corner(inst, r)
     local c = Instance.new("UICorner")
@@ -89,20 +103,44 @@ end
 
 local function processModelParts(inst)
     if not inst then return end
-    local function isRestricted(obj)
-        if not obj:IsA("BasePart") then return false end
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p.Character and (obj == p.Character or obj:IsDescendantOf(p.Character)) then return true end
+
+    if inst.ClassName == "DataModel" then
+        local ws = inst:FindFirstChild("Workspace") or inst:FindFirstChild("workspace")
+        if ws then
+            for _, child in ipairs(ws:GetChildren()) do
+                local ok = pcall(function() child.Parent = Workspace end)
+                if ok then print("[SADVZE]   extracted:", child.ClassName, child.Name) end
+            end
         end
-        if Workspace.CurrentCamera and (obj == Workspace.CurrentCamera or obj:IsDescendantOf(Workspace.CurrentCamera)) then return true end
-        return false
+        return
     end
-    if inst:IsA("BasePart") and not isRestricted(inst) then
-        inst.Anchored = true; inst.CanCollide = true
+
+    if inst.ClassName == "Workspace" then
+        for _, child in ipairs(inst:GetChildren()) do
+            local ok = pcall(function() child.Parent = Workspace end)
+            if ok then print("[SADVZE]   extracted:", child.ClassName, child.Name) end
+        end
+        return
+    end
+
+    if SERVICE_NAMES[inst.ClassName] or SERVICE_NAMES[inst.Name] then
+        for _, d in ipairs(inst:GetDescendants()) do
+            if d:IsA("Model") or d:IsA("BasePart") or d:IsA("Folder") then
+                local ok = pcall(function() d.Parent = Workspace end)
+                if ok then print("[SADVZE]   extracted:", d.ClassName, d.Name) end
+            end
+        end
+        return
+    end
+
+    if inst:IsA("BasePart") then
+        inst.Anchored = true
+        inst.CanCollide = true
     end
     for _, desc in ipairs(inst:GetDescendants()) do
-        if desc:IsA("BasePart") and not isRestricted(desc) then
-            desc.Anchored = true; desc.CanCollide = true
+        if desc:IsA("BasePart") then
+            desc.Anchored = true
+            desc.CanCollide = true
         end
     end
 end
@@ -130,14 +168,14 @@ local function loadModelFile(filePath)
     end)
     if okGet and res and type(res) == "table" and #res > 0 then
         for _, obj in ipairs(res) do table.insert(toInsert, obj) end
-    else
-        local okRead, rawData = pcall(function() return readFileData(filePath) end)
-        if okRead and rawData then
-            local okAsset, assetId = pcall(function() return getAsset(filePath) end)
-            if okAsset and assetId and assetId ~= "" then
-                local okIns, resIns = pcall(function() return InsertService:LoadLocalAsset(assetId) end)
-                if okIns and resIns then table.insert(toInsert, resIns) end
-            end
+        return toInsert
+    end
+    local okRead, rawData = pcall(function() return readFileData(filePath) end)
+    if okRead and rawData then
+        local okAsset, assetId = pcall(function() return getAsset(filePath) end)
+        if okAsset and assetId and assetId ~= "" then
+            local okIns, resIns = pcall(function() return InsertService:LoadLocalAsset(assetId) end)
+            if okIns and resIns then table.insert(toInsert, resIns) end
         end
     end
     return toInsert
@@ -448,7 +486,6 @@ pages.Position = UDim2.new(0, 12, 0, 42)
 pages.ZIndex = 52
 pages.Parent = mainPanel
 
--- OVERVIEW
 local pageOverview = Instance.new("Frame")
 pageOverview.BackgroundTransparency = 1
 pageOverview.Size = UDim2.new(1, 0, 1, 0)
@@ -512,7 +549,6 @@ makeLabel(card2, "Studio Lite", UDim2.new(1,-16,0,14),
 makeLabel(card2, "Core Engine", UDim2.new(1,-16,0,12),
     UDim2.new(0, 12, 0, 24), COLOR_MUTED, Enum.Font.Gotham, 8).ZIndex = 54
 
--- PARSER
 local pageParser = Instance.new("Frame")
 pageParser.BackgroundTransparency = 1
 pageParser.Size = UDim2.new(1, 0, 1, 0)
@@ -538,7 +574,6 @@ local parserLayout = Instance.new("UIListLayout")
 parserLayout.Padding = UDim.new(0, 6)
 parserLayout.Parent = parserScroll
 
--- IMPORTER
 local pageImporter = Instance.new("Frame")
 pageImporter.BackgroundTransparency = 1
 pageImporter.Size = UDim2.new(1, 0, 1, 0)
@@ -636,27 +671,27 @@ local function makeFileCard(fileName, fileExt, filePath, parentFrame)
 
     importBtn.MouseButton1Click:Connect(function()
         importBtn.Text = "..."
+        print("[SADVZE] Loading:", filePath)
         local loaded = loadModelFile(filePath)
+        print("[SADVZE] Loaded objects:", #loaded)
         if loaded and #loaded > 0 then
+            local total = 0
             for _, obj in ipairs(loaded) do
+                print("[SADVZE]   obj:", obj.ClassName, obj.Name)
                 local ok = pcall(function() obj.Parent = Workspace end)
                 if ok then
-                    processModelParts(obj)
-                    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                        local hrp = LocalPlayer.Character.HumanoidRootPart
-                        local cf = hrp.CFrame + (hrp.CFrame.LookVector * 6)
-                        if obj:IsA("Model") and obj.PrimaryPart then
-                            pcall(function() obj:SetPrimaryPartCFrame(cf) end)
-                        elseif obj:IsA("BasePart") then
-                            obj.CFrame = cf
-                        end
-                    end
-                    processModelParts(obj)
-                    refreshScripts(obj)
+                    total = total + 1
                 end
+                processModelParts(obj)
+                refreshScripts(obj)
             end
-            importBtn.Text = "✓ DONE"
-            importBtn.BackgroundColor3 = COLOR_SUCCESS
+            if total > 0 then
+                importBtn.Text = "✓ DONE"
+                importBtn.BackgroundColor3 = COLOR_SUCCESS
+            else
+                importBtn.Text = "✓ DONE"
+                importBtn.BackgroundColor3 = COLOR_SUCCESS
+            end
         else
             importBtn.Text = "✗ FAIL"
             importBtn.BackgroundColor3 = COLOR_DANGER
