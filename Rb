@@ -1,138 +1,40 @@
---[[ ============================================================
-     SADVZE X CUTE — PREMIUM IMPORTER
-     Full Edition + Support RBXL
-     ============================================================ ]]
-
-local CoreGui       = game:GetService("CoreGui")
-local RunService    = game:GetService("RunService")
-local TweenService  = game:GetService("TweenService")
-local Workspace     = game:GetService("Workspace")
-local Players       = game:GetService("Players")
-local InsertService = game:GetService("InsertService")
-local LocalPlayer   = Players.LocalPlayer
-
-local getFiles     = listfiles or list_files or function() return {} end
-local getAsset     = getcustomasset or getsynasset or function() return "" end
-local readFileData = readfile or function() return nil end
-
-local COLOR_BG        = Color3.fromRGB(8, 8, 10)
-local COLOR_SURFACE   = Color3.fromRGB(16, 16, 20)
-local COLOR_SURFACE_2 = Color3.fromRGB(24, 24, 30)
-local COLOR_ACCENT    = Color3.fromRGB(220, 40, 60)
-local COLOR_ACCENT_H  = Color3.fromRGB(255, 80, 100)
-local COLOR_TEXT      = Color3.fromRGB(245, 245, 250)
-local COLOR_MUTED     = Color3.fromRGB(130, 130, 150)
-local COLOR_DIM       = Color3.fromRGB(70, 70, 85)
-local COLOR_RBXM      = Color3.fromRGB(180, 60, 90)
-local COLOR_RBXL      = Color3.fromRGB(220, 40, 60)
-local COLOR_SUCCESS   = Color3.fromRGB(90, 220, 140)
-local COLOR_DANGER    = Color3.fromRGB(255, 60, 60)
-
-local SERVICE_NAMES = {
-    Workspace=true, Lighting=true, Players=true, ReplicatedFirst=true,
-    ReplicatedStorage=true, ServerScriptService=true, ServerStorage=true,
-    StarterGui=true, StarterPack=true, StarterPlayer=true, Teams=true,
-    SoundService=true, Chat=true, TimerService=true, CoreGui=true,
-    UserInputService=true, HttpService=true, InsertService=true,
-    LocalizationService=true, ScriptContext=true, LogService=true,
-    GuiService=true, ContentProvider=true, MarketplaceService=true,
-    CollectionService=true, PhysicsService=true, PathfindingService=true,
-    TestService=true, BadgeService=true, GroupService=true,
-    TeleportService=true, AssetService=true, MemoryStoreService=true,
-    DataStoreService=true, PolicyService=true, ProximityPromptService=true,
-    TextChatService=true, VoiceChatService=true,
-}
-
-local function corner(inst, r)
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, r or 8)
-    c.Parent = inst
-    return c
-end
-
-local function makeLabel(parent, text, size, pos, color, font, textSize, xAlign)
-    local l = Instance.new("TextLabel")
-    l.BackgroundTransparency = 1
-    l.Text = text
-    l.Font = font or Enum.Font.GothamMedium
-    l.TextSize = textSize or 10
-    l.TextColor3 = color or COLOR_TEXT
-    l.TextXAlignment = xAlign or Enum.TextXAlignment.Left
-    l.Size = size
-    l.Position = pos
-    l.Parent = parent
-    return l
-end
-
-local function applyGradient(target, cA, cB, rot)
-    local g = Instance.new("UIGradient")
-    g.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, cA),
-        ColorSequenceKeypoint.new(1, cB),
-    })
-    g.Rotation = rot or 0
-    g.Parent = target
-    return g
-end
-
-local function applyTextGradient(label, cA, cMid, cB)
-    local g = Instance.new("UIGradient")
-    g.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, cA),
-        ColorSequenceKeypoint.new(0.5, cMid or cA),
-        ColorSequenceKeypoint.new(1, cB),
-    })
-    g.Parent = label
-    return g
-end
-
-local function applyRedBorder(target, thickness)
-    local grad = Instance.new("UIGradient")
-    grad.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0.00, Color3.fromRGB(255, 40, 60)),
-        ColorSequenceKeypoint.new(0.33, Color3.fromRGB(255, 120, 140)),
-        ColorSequenceKeypoint.new(0.66, Color3.fromRGB(140, 15, 30)),
-        ColorSequenceKeypoint.new(1.00, Color3.fromRGB(255, 40, 60)),
-    })
-    grad.Parent = target
-    if thickness then target.Thickness = thickness end
-    RunService.RenderStepped:Connect(function()
-        grad.Rotation = (tick() * 40) % 360
-    end)
-end
-
 local function processModelParts(inst)
     if not inst then return end
 
+    -- Kalau DataModel: restore SEMUA service ke service yang sama
     if inst.ClassName == "DataModel" then
-        local ws = inst:FindFirstChild("Workspace") or inst:FindFirstChild("workspace")
-        if ws then
-            for _, child in ipairs(ws:GetChildren()) do
-                local ok = pcall(function() child.Parent = Workspace end)
-                if ok then print("[SADVZE]   extracted:", child.ClassName, child.Name) end
+        print("[SADVZE] DataModel detected — restoring all services")
+        for _, svc in ipairs(inst:GetChildren()) do
+            local svcName = svc.ClassName
+            local targetSvc = game:FindFirstChild(svcName)
+            if targetSvc and targetSvc ~= game then
+                print("[SADVZE] Restoring service:", svcName, "→", #svc:GetChildren(), "children")
+                for _, child in ipairs(svc:GetChildren()) do
+                    local ok = pcall(function() child.Parent = targetSvc end)
+                    if ok then print("[SADVZE]   →", child.ClassName, child.Name) end
+                end
+            else
+                print("[SADVZE] Skip service:", svcName, "(not found)")
             end
         end
         return
     end
 
-    if inst.ClassName == "Workspace" then
-        for _, child in ipairs(inst:GetChildren()) do
-            local ok = pcall(function() child.Parent = Workspace end)
-            if ok then print("[SADVZE]   extracted:", child.ClassName, child.Name) end
-        end
-        return
-    end
-
+    -- Kalau service (TimerService, Workspace, dll): restore ke service yang sama
     if SERVICE_NAMES[inst.ClassName] or SERVICE_NAMES[inst.Name] then
-        for _, d in ipairs(inst:GetDescendants()) do
-            if d:IsA("Model") or d:IsA("BasePart") or d:IsA("Folder") then
-                local ok = pcall(function() d.Parent = Workspace end)
-                if ok then print("[SADVZE]   extracted:", d.ClassName, d.Name) end
+        local svcName = inst.ClassName
+        local targetSvc = game:FindFirstChild(svcName)
+        if targetSvc then
+            print("[SADVZE] Restoring service:", svcName)
+            for _, child in ipairs(inst:GetChildren()) do
+                local ok = pcall(function() child.Parent = targetSvc end)
+                if ok then print("[SADVZE]   →", child.ClassName, child.Name) end
             end
         end
         return
     end
 
+    -- Objek biasa — anchor dan collide
     if inst:IsA("BasePart") then
         inst.Anchored = true
         inst.CanCollide = true
@@ -160,24 +62,40 @@ end
 
 local function loadModelFile(filePath)
     local toInsert = {}
+
+    -- Coba InsertService:LoadLocalAsset dulu (lebih reliable buat .rbxl)
+    local okAsset, assetId = pcall(function() return getAsset(filePath) end)
+    if okAsset and assetId and assetId ~= "" then
+        local okIns, resIns = pcall(function()
+            return InsertService:LoadLocalAsset(assetId)
+        end)
+        if okIns and resIns then
+            print("[SADVZE] InsertService loaded:", resIns.ClassName)
+            table.insert(toInsert, resIns)
+            return toInsert
+        end
+    end
+
+    -- Fallback: getobjects
     local okGet, res = pcall(function()
         if getobjects then
-            local ap = getAsset(filePath)
-            return getobjects(ap ~= "" and ap or filePath)
+            return getobjects(assetId ~= "" and assetId or filePath)
         end
     end)
     if okGet and res and type(res) == "table" and #res > 0 then
-        for _, obj in ipairs(res) do table.insert(toInsert, obj) end
+        for _, obj in ipairs(res) do
+            print("[SADVZE] getobjects returned:", obj.ClassName)
+            table.insert(toInsert, obj)
+        end
         return toInsert
     end
+
+    -- Fallback terakhir: readfile
     local okRead, rawData = pcall(function() return readFileData(filePath) end)
     if okRead and rawData then
-        local okAsset, assetId = pcall(function() return getAsset(filePath) end)
-        if okAsset and assetId and assetId ~= "" then
-            local okIns, resIns = pcall(function() return InsertService:LoadLocalAsset(assetId) end)
-            if okIns and resIns then table.insert(toInsert, resIns) end
-        end
+        print("[SADVZE] readfile returned", #rawData, "bytes")
     end
+
     return toInsert
 end
 
