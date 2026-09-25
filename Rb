@@ -1,4 +1,8 @@
---[[ SADVZE X CUTE — PREMIUM IMPORTER | Gradient Red-Black Edition ]]
+--[[ ============================================================
+     SADVZE X CUTE — PREMIUM IMPORTER (FULL)
+     Splash + Main UI + Toggle + Gradient + Vortex Border
+     Logika load: ALLZ
+     ============================================================ ]]
 
 local CoreGui       = game:GetService("CoreGui")
 local RunService    = game:GetService("RunService")
@@ -71,14 +75,15 @@ end
 local function applyRedBorder(target, thickness)
     local grad = Instance.new("UIGradient")
     grad.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0.00, Color3.fromRGB(255, 60, 80)),
-        ColorSequenceKeypoint.new(0.50, Color3.fromRGB(140, 15, 30)),
-        ColorSequenceKeypoint.new(1.00, Color3.fromRGB(255, 60, 80)),
+        ColorSequenceKeypoint.new(0.00, Color3.fromRGB(255, 40, 60)),
+        ColorSequenceKeypoint.new(0.33, Color3.fromRGB(255, 120, 140)),
+        ColorSequenceKeypoint.new(0.66, Color3.fromRGB(140, 15, 30)),
+        ColorSequenceKeypoint.new(1.00, Color3.fromRGB(255, 40, 60)),
     })
     grad.Parent = target
     if thickness then target.Thickness = thickness end
     RunService.RenderStepped:Connect(function()
-        grad.Rotation = (tick() * 25) % 360
+        grad.Rotation = (tick() * 40) % 360
     end)
 end
 
@@ -138,7 +143,6 @@ local function loadModelFile(filePath)
     return toInsert
 end
 
--- ROOT
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "SadvzeCuteImporter"
 screenGui.ResetOnSpawn = false
@@ -153,6 +157,26 @@ if not okParent or not screenGui.Parent then
     screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 end
 
+-- TOGGLE
+local toggleIcon = Instance.new("TextButton")
+toggleIcon.Size = UDim2.new(0, 44, 0, 44)
+toggleIcon.Position = UDim2.new(0, 15, 0.5, -22)
+toggleIcon.BackgroundColor3 = COLOR_ACCENT
+toggleIcon.Text = "sxc"
+toggleIcon.TextColor3 = COLOR_TEXT
+toggleIcon.Font = Enum.Font.GothamBold
+toggleIcon.TextSize = 11
+toggleIcon.Active = true
+toggleIcon.Draggable = true
+toggleIcon.ZIndex = 300
+toggleIcon.Parent = screenGui
+corner(toggleIcon, 22)
+applyGradient(toggleIcon, Color3.fromRGB(240, 60, 90), Color3.fromRGB(140, 15, 35), 135)
+local toggleStroke = Instance.new("UIStroke")
+toggleStroke.Thickness = 2
+toggleStroke.Parent = toggleIcon
+applyRedBorder(toggleStroke)
+
 -- SPLASH
 local splash = Instance.new("Frame")
 splash.BackgroundColor3 = Color3.fromRGB(5, 5, 8)
@@ -165,13 +189,12 @@ corner(splash, 16)
 applyGradient(splash, Color3.fromRGB(35, 8, 15), Color3.fromRGB(5, 5, 8), 135)
 
 local splashStroke = Instance.new("UIStroke")
-splashStroke.Thickness = 1.5
-splashStroke.Transparency = 0.3
+splashStroke.Thickness = 2
 splashStroke.Parent = splash
 applyRedBorder(splashStroke)
 
 local splashLogo = Instance.new("Frame")
-splashLogo.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
+splashLogo.BackgroundColor3 = COLOR_SURFACE_2
 splashLogo.Size = UDim2.new(0, 48, 0, 48)
 splashLogo.Position = UDim2.new(0.5, -24, 0, 22)
 splashLogo.ZIndex = 101
@@ -259,7 +282,7 @@ local function setSplashProgress(p)
     end
 end
 
--- MAIN UI
+-- MAIN
 local mainUi = Instance.new("Frame")
 mainUi.BackgroundColor3 = COLOR_BG
 mainUi.Size = UDim2.new(0, 540, 0, 330)
@@ -273,12 +296,10 @@ corner(mainUi, 16)
 applyGradient(mainUi, Color3.fromRGB(25, 10, 16), Color3.fromRGB(8, 8, 10), 135)
 
 local mainStroke = Instance.new("UIStroke")
-mainStroke.Thickness = 1.5
-mainStroke.Transparency = 0.3
+mainStroke.Thickness = 2
 mainStroke.Parent = mainUi
 applyRedBorder(mainStroke)
 
--- SIDEBAR
 local sidebar = Instance.new("Frame")
 sidebar.BackgroundColor3 = Color3.fromRGB(12, 8, 14)
 sidebar.Size = UDim2.new(0, 145, 1, 0)
@@ -395,7 +416,6 @@ rescanBtn.Parent = sidebar
 corner(rescanBtn, 7)
 applyGradient(rescanBtn, Color3.fromRGB(55, 15, 28), Color3.fromRGB(24, 18, 24), 0)
 
--- MAIN PANEL
 local mainPanel = Instance.new("Frame")
 mainPanel.BackgroundTransparency = 1
 mainPanel.Size = UDim2.new(1, -145, 1, 0)
@@ -428,7 +448,7 @@ pages.Position = UDim2.new(0, 12, 0, 42)
 pages.ZIndex = 52
 pages.Parent = mainPanel
 
--- OVERVIEW PAGE
+-- OVERVIEW
 local pageOverview = Instance.new("Frame")
 pageOverview.BackgroundTransparency = 1
 pageOverview.Size = UDim2.new(1, 0, 1, 0)
@@ -443,11 +463,6 @@ profileCard.Parent = pageOverview
 corner(profileCard, 10)
 applyGradient(profileCard, Color3.fromRGB(38, 12, 20), Color3.fromRGB(16, 12, 16), 0)
 
-local pcStroke = Instance.new("UIStroke")
-pcStroke.Color = Color3.fromRGB(80, 30, 45)
-pcStroke.Thickness = 1
-pcStroke.Parent = profileCard
-
 local avCircle = Instance.new("Frame")
 avCircle.BackgroundColor3 = COLOR_ACCENT
 avCircle.Size = UDim2.new(0, 38, 0, 38)
@@ -456,12 +471,6 @@ avCircle.ZIndex = 54
 avCircle.Parent = profileCard
 corner(avCircle, 19)
 applyGradient(avCircle, Color3.fromRGB(255, 60, 90), Color3.fromRGB(160, 20, 40), 135)
-
-local avStroke2 = Instance.new("UIStroke")
-avStroke2.Color = COLOR_ACCENT_H
-avStroke2.Thickness = 1.5
-avStroke2.Transparency = 0.3
-avStroke2.Parent = avCircle
 
 makeLabel(avCircle, string.sub(LocalPlayer.DisplayName or LocalPlayer.Name, 1, 1),
     UDim2.new(1,0,1,0), UDim2.new(0,0,0,0),
@@ -503,33 +512,7 @@ makeLabel(card2, "Studio Lite", UDim2.new(1,-16,0,14),
 makeLabel(card2, "Core Engine", UDim2.new(1,-16,0,12),
     UDim2.new(0, 12, 0, 24), COLOR_MUTED, Enum.Font.Gotham, 8).ZIndex = 54
 
-local card3 = Instance.new("Frame")
-card3.BackgroundColor3 = COLOR_SURFACE
-card3.Size = UDim2.new(1, 0, 0, 46)
-card3.Position = UDim2.new(0, 0, 0, 122)
-card3.ZIndex = 53
-card3.Parent = pageOverview
-corner(card3, 10)
-applyGradient(card3, Color3.fromRGB(40, 10, 18), Color3.fromRGB(16, 12, 16), 0)
-
-local c3Logo = Instance.new("Frame")
-c3Logo.BackgroundColor3 = COLOR_ACCENT
-c3Logo.Size = UDim2.new(0, 28, 0, 28)
-c3Logo.Position = UDim2.new(0, 12, 0.5, -14)
-c3Logo.ZIndex = 54
-c3Logo.Parent = card3
-corner(c3Logo, 8)
-applyGradient(c3Logo, Color3.fromRGB(255, 60, 90), Color3.fromRGB(160, 20, 40), 135)
-
-makeLabel(c3Logo, "s", UDim2.new(1,0,1,0), UDim2.new(0,0,0,0),
-    COLOR_TEXT, Enum.Font.GothamBlack, 12, Enum.TextXAlignment.Center).ZIndex = 55
-
-makeLabel(card3, "sadvze x cute", UDim2.new(1,-80,0,14),
-    UDim2.new(0, 50, 0, 6), COLOR_TEXT, Enum.Font.GothamBold, 10).ZIndex = 54
-makeLabel(card3, "Developed by LO 🖤", UDim2.new(1,-80,0,12),
-    UDim2.new(0, 50, 0, 24), COLOR_MUTED, Enum.Font.Gotham, 8).ZIndex = 54
-
--- PARSER PAGE
+-- PARSER
 local pageParser = Instance.new("Frame")
 pageParser.BackgroundTransparency = 1
 pageParser.Size = UDim2.new(1, 0, 1, 0)
@@ -555,7 +538,7 @@ local parserLayout = Instance.new("UIListLayout")
 parserLayout.Padding = UDim.new(0, 6)
 parserLayout.Parent = parserScroll
 
--- IMPORTER PAGE
+-- IMPORTER
 local pageImporter = Instance.new("Frame")
 pageImporter.BackgroundTransparency = 1
 pageImporter.Size = UDim2.new(1, 0, 1, 0)
@@ -581,7 +564,6 @@ local importerLayout = Instance.new("UIListLayout")
 importerLayout.Padding = UDim.new(0, 6)
 importerLayout.Parent = importerScroll
 
--- SWITCH PAGE
 local function switchPage(name, menu)
     pageOverview.Visible = (name == "ov")
     pageParser.Visible = (name == "pa")
@@ -604,7 +586,6 @@ menuParser.row.MouseButton1Click:Connect(function() resetMenus(); switchPage("pa
 menuImporter.row.MouseButton1Click:Connect(function() resetMenus(); switchPage("im", menuImporter) end)
 menuSettings.row.MouseButton1Click:Connect(function() resetMenus(); switchPage("ov", menuSettings) end)
 
--- FILE CARD
 local function makeFileCard(fileName, fileExt, filePath, parentFrame)
     local isRbxm = (fileExt == "rbxm" or fileExt == "rbxmx")
     local extColor = isRbxm and COLOR_RBXM or COLOR_RBXL
@@ -683,14 +664,17 @@ local function makeFileCard(fileName, fileExt, filePath, parentFrame)
     end)
 end
 
--- SCAN
 local scanning = false
 local function scanFiles()
     if scanning then return end
     scanning = true
 
-    for _, c in ipairs(parserScroll:GetChildren()) do if c:IsA("Frame") then c:Destroy() end end
-    for _, c in ipairs(importerScroll:GetChildren()) do if c:IsA("Frame") then c:Destroy() end end
+    for _, c in ipairs(parserScroll:GetChildren()) do
+        if c:IsA("Frame") then c:Destroy() end
+    end
+    for _, c in ipairs(importerScroll:GetChildren()) do
+        if c:IsA("Frame") then c:Destroy() end
+    end
 
     local files = {}
     for _, p in ipairs({"/sdcard/Download", "/sdcard/Documents", "/sdcard", "workspace", "", ".", "./"}) do
@@ -718,7 +702,17 @@ end
 
 rescanBtn.MouseButton1Click:Connect(scanFiles)
 
--- TRANSISI
+toggleIcon.MouseButton1Click:Connect(function()
+    if splash.Visible then
+        splash.Visible = false
+        mainUi.Visible = true
+    elseif mainUi.Visible then
+        mainUi.Visible = false
+    else
+        mainUi.Visible = true
+    end
+end)
+
 task.spawn(function()
     for i = 1, 20 do
         setSplashProgress(i / 20)
