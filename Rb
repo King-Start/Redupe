@@ -1,31 +1,135 @@
+--[[ ============================================================
+     SADVZE X CUTE — PREMIUM IMPORTER
+     Full Edition + Full Service Restore (rbxl support)
+     ============================================================ ]]
+
+local CoreGui       = game:GetService("CoreGui")
+local RunService    = game:GetService("RunService")
+local TweenService  = game:GetService("TweenService")
+local Workspace     = game:GetService("Workspace")
+local Players       = game:GetService("Players")
+local InsertService = game:GetService("InsertService")
+local LocalPlayer   = Players.LocalPlayer
+
+local getFiles     = listfiles or list_files or function() return {} end
+local getAsset     = getcustomasset or getsynasset or function() return "" end
+local readFileData = readfile or function() return nil end
+
+local COLOR_BG        = Color3.fromRGB(8, 8, 10)
+local COLOR_SURFACE   = Color3.fromRGB(16, 16, 20)
+local COLOR_SURFACE_2 = Color3.fromRGB(24, 24, 30)
+local COLOR_ACCENT    = Color3.fromRGB(220, 40, 60)
+local COLOR_ACCENT_H  = Color3.fromRGB(255, 80, 100)
+local COLOR_TEXT      = Color3.fromRGB(245, 245, 250)
+local COLOR_MUTED     = Color3.fromRGB(130, 130, 150)
+local COLOR_DIM       = Color3.fromRGB(70, 70, 85)
+local COLOR_RBXM      = Color3.fromRGB(180, 60, 90)
+local COLOR_RBXL      = Color3.fromRGB(220, 40, 60)
+local COLOR_SUCCESS   = Color3.fromRGB(90, 220, 140)
+local COLOR_DANGER    = Color3.fromRGB(255, 60, 60)
+
+local SERVICE_NAMES = {
+    Workspace=true, Lighting=true, Players=true, ReplicatedFirst=true,
+    ReplicatedStorage=true, ServerScriptService=true, ServerStorage=true,
+    StarterGui=true, StarterPack=true, StarterPlayer=true, Teams=true,
+    SoundService=true, Chat=true, TimerService=true, CoreGui=true,
+    UserInputService=true, HttpService=true, InsertService=true,
+    LocalizationService=true, ScriptContext=true, LogService=true,
+    GuiService=true, ContentProvider=true, MarketplaceService=true,
+    CollectionService=true, PhysicsService=true, PathfindingService=true,
+    TestService=true, BadgeService=true, GroupService=true,
+    TeleportService=true, AssetService=true, MemoryStoreService=true,
+    DataStoreService=true, PolicyService=true, ProximityPromptService=true,
+    TextChatService=true, VoiceChatService=true,
+}
+
+local function corner(inst, r)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, r or 8)
+    c.Parent = inst
+    return c
+end
+
+local function makeLabel(parent, text, size, pos, color, font, textSize, xAlign)
+    local l = Instance.new("TextLabel")
+    l.BackgroundTransparency = 1
+    l.Text = text
+    l.Font = font or Enum.Font.GothamMedium
+    l.TextSize = textSize or 10
+    l.TextColor3 = color or COLOR_TEXT
+    l.TextXAlignment = xAlign or Enum.TextXAlignment.Left
+    l.Size = size
+    l.Position = pos
+    l.Parent = parent
+    return l
+end
+
+local function applyGradient(target, cA, cB, rot)
+    local g = Instance.new("UIGradient")
+    g.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, cA),
+        ColorSequenceKeypoint.new(1, cB),
+    })
+    g.Rotation = rot or 0
+    g.Parent = target
+    return g
+end
+
+local function applyTextGradient(label, cA, cMid, cB)
+    local g = Instance.new("UIGradient")
+    g.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, cA),
+        ColorSequenceKeypoint.new(0.5, cMid or cA),
+        ColorSequenceKeypoint.new(1, cB),
+    })
+    g.Parent = label
+    return g
+end
+
+local function applyRedBorder(target, thickness)
+    local grad = Instance.new("UIGradient")
+    grad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0.00, Color3.fromRGB(255, 40, 60)),
+        ColorSequenceKeypoint.new(0.33, Color3.fromRGB(255, 120, 140)),
+        ColorSequenceKeypoint.new(0.66, Color3.fromRGB(140, 15, 30)),
+        ColorSequenceKeypoint.new(1.00, Color3.fromRGB(255, 40, 60)),
+    })
+    grad.Parent = target
+    if thickness then target.Thickness = thickness end
+    RunService.RenderStepped:Connect(function()
+        grad.Rotation = (tick() * 40) % 360
+    end)
+end
+
+-- FULL SERVICE RESTORE (buat rbxl/rbxlx)
 local function processModelParts(inst)
     if not inst then return end
 
-    -- Kalau DataModel: restore SEMUA service ke service yang sama
+    -- DataModel: iterasi semua service, restore ke service yang sama
     if inst.ClassName == "DataModel" then
         print("[SADVZE] DataModel detected — restoring all services")
         for _, svc in ipairs(inst:GetChildren()) do
             local svcName = svc.ClassName
             local targetSvc = game:FindFirstChild(svcName)
             if targetSvc and targetSvc ~= game then
-                print("[SADVZE] Restoring service:", svcName, "→", #svc:GetChildren(), "children")
+                print("[SADVZE] Restoring:", svcName, "→", #svc:GetChildren(), "children")
                 for _, child in ipairs(svc:GetChildren()) do
                     local ok = pcall(function() child.Parent = targetSvc end)
                     if ok then print("[SADVZE]   →", child.ClassName, child.Name) end
                 end
             else
-                print("[SADVZE] Skip service:", svcName, "(not found)")
+                print("[SADVZE] Skip:", svcName, "(no target service)")
             end
         end
         return
     end
 
-    -- Kalau service (TimerService, Workspace, dll): restore ke service yang sama
+    -- Single service (TimerService, Workspace, dll): restore ke service yang sama
     if SERVICE_NAMES[inst.ClassName] or SERVICE_NAMES[inst.Name] then
         local svcName = inst.ClassName
         local targetSvc = game:FindFirstChild(svcName)
         if targetSvc then
-            print("[SADVZE] Restoring service:", svcName)
+            print("[SADVZE] Restoring:", svcName)
             for _, child in ipairs(inst:GetChildren()) do
                 local ok = pcall(function() child.Parent = targetSvc end)
                 if ok then print("[SADVZE]   →", child.ClassName, child.Name) end
@@ -34,7 +138,7 @@ local function processModelParts(inst)
         return
     end
 
-    -- Objek biasa — anchor dan collide
+    -- Objek biasa (Model, BasePart, Folder): anchor + collide
     if inst:IsA("BasePart") then
         inst.Anchored = true
         inst.CanCollide = true
@@ -60,23 +164,28 @@ local function refreshScripts(model)
     end)
 end
 
+-- LOAD: InsertService dulu, baru getobjects
 local function loadModelFile(filePath)
     local toInsert = {}
+    local assetId = ""
 
-    -- Coba InsertService:LoadLocalAsset dulu (lebih reliable buat .rbxl)
-    local okAsset, assetId = pcall(function() return getAsset(filePath) end)
-    if okAsset and assetId and assetId ~= "" then
+    -- Coba getAsset dulu
+    local okAsset, aid = pcall(function() return getAsset(filePath) end)
+    if okAsset and aid and aid ~= "" then assetId = aid end
+
+    -- Prioritas 1: InsertService:LoadLocalAsset
+    if assetId ~= "" then
         local okIns, resIns = pcall(function()
             return InsertService:LoadLocalAsset(assetId)
         end)
         if okIns and resIns then
-            print("[SADVZE] InsertService loaded:", resIns.ClassName)
+            print("[SADVZE] InsertService loaded:", resIns.ClassName, resIns.Name)
             table.insert(toInsert, resIns)
             return toInsert
         end
     end
 
-    -- Fallback: getobjects
+    -- Prioritas 2: getobjects
     local okGet, res = pcall(function()
         if getobjects then
             return getobjects(assetId ~= "" and assetId or filePath)
@@ -84,16 +193,16 @@ local function loadModelFile(filePath)
     end)
     if okGet and res and type(res) == "table" and #res > 0 then
         for _, obj in ipairs(res) do
-            print("[SADVZE] getobjects returned:", obj.ClassName)
+            print("[SADVZE] getobjects returned:", obj.ClassName, obj.Name)
             table.insert(toInsert, obj)
         end
         return toInsert
     end
 
-    -- Fallback terakhir: readfile
+    -- Prioritas 3: readfile (log aja, ga bisa parse)
     local okRead, rawData = pcall(function() return readFileData(filePath) end)
     if okRead and rawData then
-        print("[SADVZE] readfile returned", #rawData, "bytes")
+        print("[SADVZE] readfile returned", #rawData, "bytes — cannot parse binary")
     end
 
     return toInsert
@@ -404,6 +513,7 @@ pages.Position = UDim2.new(0, 12, 0, 42)
 pages.ZIndex = 52
 pages.Parent = mainPanel
 
+-- OVERVIEW
 local pageOverview = Instance.new("Frame")
 pageOverview.BackgroundTransparency = 1
 pageOverview.Size = UDim2.new(1, 0, 1, 0)
@@ -467,6 +577,7 @@ makeLabel(card2, "Studio Lite", UDim2.new(1,-16,0,14),
 makeLabel(card2, "Core Engine", UDim2.new(1,-16,0,12),
     UDim2.new(0, 12, 0, 24), COLOR_MUTED, Enum.Font.Gotham, 8).ZIndex = 54
 
+-- PARSER
 local pageParser = Instance.new("Frame")
 pageParser.BackgroundTransparency = 1
 pageParser.Size = UDim2.new(1, 0, 1, 0)
@@ -492,6 +603,7 @@ local parserLayout = Instance.new("UIListLayout")
 parserLayout.Padding = UDim.new(0, 6)
 parserLayout.Parent = parserScroll
 
+-- IMPORTER
 local pageImporter = Instance.new("Frame")
 pageImporter.BackgroundTransparency = 1
 pageImporter.Size = UDim2.new(1, 0, 1, 0)
@@ -589,31 +701,33 @@ local function makeFileCard(fileName, fileExt, filePath, parentFrame)
 
     importBtn.MouseButton1Click:Connect(function()
         importBtn.Text = "..."
-        print("[SADVZE] Loading:", filePath)
+        print("[SADVZE] ======== IMPORT START ========")
+        print("[SADVZE] File:", fileName)
+        print("[SADVZE] Path:", filePath)
+
         local loaded = loadModelFile(filePath)
-        print("[SADVZE] Loaded objects:", #loaded)
+        print("[SADVZE] Total loaded:", #loaded)
+
         if loaded and #loaded > 0 then
-            local total = 0
             for _, obj in ipairs(loaded) do
-                print("[SADVZE]   obj:", obj.ClassName, obj.Name)
+                print("[SADVZE] Processing:", obj.ClassName, obj.Name)
                 local ok = pcall(function() obj.Parent = Workspace end)
                 if ok then
-                    total = total + 1
+                    print("[SADVZE]   parented to Workspace")
+                else
+                    print("[SADVZE]   parent failed, using service restore")
                 end
                 processModelParts(obj)
                 refreshScripts(obj)
             end
-            if total > 0 then
-                importBtn.Text = "✓ DONE"
-                importBtn.BackgroundColor3 = COLOR_SUCCESS
-            else
-                importBtn.Text = "✓ DONE"
-                importBtn.BackgroundColor3 = COLOR_SUCCESS
-            end
+            importBtn.Text = "✓ DONE"
+            importBtn.BackgroundColor3 = COLOR_SUCCESS
         else
             importBtn.Text = "✗ FAIL"
             importBtn.BackgroundColor3 = COLOR_DANGER
+            print("[SADVZE] Nothing loaded — file may be too large or unsupported")
         end
+        print("[SADVZE] ======== IMPORT END ========")
     end)
 end
 
