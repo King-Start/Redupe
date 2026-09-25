@@ -1,8 +1,4 @@
---[[ ============================================================
-     SADVZE X CUTE — PREMIUM IMPORTER
-     Splash + Main UI + Gradient Merah-Hitam
-     Logika load: ALLZ
-     ============================================================ ]]
+--[[ SADVZE X CUTE — PREMIUM IMPORTER | Gradient Red-Black Edition ]]
 
 local CoreGui       = game:GetService("CoreGui")
 local RunService    = game:GetService("RunService")
@@ -16,7 +12,6 @@ local getFiles     = listfiles or list_files or function() return {} end
 local getAsset     = getcustomasset or getsynasset or function() return "" end
 local readFileData = readfile or function() return nil end
 
--- THEME
 local COLOR_BG        = Color3.fromRGB(8, 8, 10)
 local COLOR_SURFACE   = Color3.fromRGB(16, 16, 20)
 local COLOR_SURFACE_2 = Color3.fromRGB(24, 24, 30)
@@ -30,7 +25,6 @@ local COLOR_RBXL      = Color3.fromRGB(220, 40, 60)
 local COLOR_SUCCESS   = Color3.fromRGB(90, 220, 140)
 local COLOR_DANGER    = Color3.fromRGB(255, 60, 60)
 
--- HELPERS
 local function corner(inst, r)
     local c = Instance.new("UICorner")
     c.CornerRadius = UDim.new(0, r or 8)
@@ -52,23 +46,26 @@ local function makeLabel(parent, text, size, pos, color, font, textSize, xAlign)
     return l
 end
 
-local function applyGradient(target, colorA, colorB, rotation, colorMid)
-    local grad = Instance.new("UIGradient")
-    if colorMid then
-        grad.Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, colorA),
-            ColorSequenceKeypoint.new(0.5, colorMid),
-            ColorSequenceKeypoint.new(1, colorB),
-        })
-    else
-        grad.Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, colorA),
-            ColorSequenceKeypoint.new(1, colorB),
-        })
-    end
-    grad.Rotation = rotation or 90
-    grad.Parent = target
-    return grad
+local function applyGradient(target, cA, cB, rot)
+    local g = Instance.new("UIGradient")
+    g.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, cA),
+        ColorSequenceKeypoint.new(1, cB),
+    })
+    g.Rotation = rot or 0
+    g.Parent = target
+    return g
+end
+
+local function applyTextGradient(label, cA, cMid, cB)
+    local g = Instance.new("UIGradient")
+    g.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, cA),
+        ColorSequenceKeypoint.new(0.5, cMid or cA),
+        ColorSequenceKeypoint.new(1, cB),
+    })
+    g.Parent = label
+    return g
 end
 
 local function applyRedBorder(target, thickness)
@@ -85,18 +82,6 @@ local function applyRedBorder(target, thickness)
     end)
 end
 
-local function applyTextGradient(label, colorA, colorMid, colorB)
-    local grad = Instance.new("UIGradient")
-    grad.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, colorA),
-        ColorSequenceKeypoint.new(0.5, colorMid or colorA),
-        ColorSequenceKeypoint.new(1, colorB),
-    })
-    grad.Parent = label
-    return grad
-end
-
--- PROCESS PARTS (ALLZ)
 local function processModelParts(inst)
     if not inst then return end
     local function isRestricted(obj)
@@ -108,13 +93,11 @@ local function processModelParts(inst)
         return false
     end
     if inst:IsA("BasePart") and not isRestricted(inst) then
-        inst.Anchored = true
-        inst.CanCollide = true
+        inst.Anchored = true; inst.CanCollide = true
     end
     for _, desc in ipairs(inst:GetDescendants()) do
         if desc:IsA("BasePart") and not isRestricted(desc) then
-            desc.Anchored = true
-            desc.CanCollide = true
+            desc.Anchored = true; desc.CanCollide = true
         end
     end
 end
@@ -132,13 +115,12 @@ local function refreshScripts(model)
     end)
 end
 
--- LOAD MODEL (ALLZ)
 local function loadModelFile(filePath)
     local toInsert = {}
     local okGet, res = pcall(function()
         if getobjects then
-            local assetPath = getAsset(filePath)
-            return getobjects(assetPath ~= "" and assetPath or filePath)
+            local ap = getAsset(filePath)
+            return getobjects(ap ~= "" and ap or filePath)
         end
     end)
     if okGet and res and type(res) == "table" and #res > 0 then
@@ -171,9 +153,7 @@ if not okParent or not screenGui.Parent then
     screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 end
 
--- ============================================================
 -- SPLASH
--- ============================================================
 local splash = Instance.new("Frame")
 splash.BackgroundColor3 = Color3.fromRGB(5, 5, 8)
 splash.Size = UDim2.new(0, 320, 0, 230)
@@ -182,7 +162,7 @@ splash.ZIndex = 100
 splash.Active = true
 splash.Parent = screenGui
 corner(splash, 16)
-applyGradient(splash, Color3.fromRGB(30, 8, 14), Color3.fromRGB(5, 5, 8), 135)
+applyGradient(splash, Color3.fromRGB(35, 8, 15), Color3.fromRGB(5, 5, 8), 135)
 
 local splashStroke = Instance.new("UIStroke")
 splashStroke.Thickness = 1.5
@@ -197,13 +177,14 @@ splashLogo.Position = UDim2.new(0.5, -24, 0, 22)
 splashLogo.ZIndex = 101
 splashLogo.Parent = splash
 corner(splashLogo, 12)
-applyGradient(splashLogo, Color3.fromRGB(60, 15, 28), Color3.fromRGB(20, 8, 12), 135)
+applyGradient(splashLogo, Color3.fromRGB(70, 15, 30), Color3.fromRGB(20, 8, 14), 135)
 
 local slStroke = Instance.new("UIStroke")
 slStroke.Color = COLOR_ACCENT
 slStroke.Thickness = 1.5
 slStroke.Transparency = 0.3
 slStroke.Parent = splashLogo
+
 makeLabel(splashLogo, "sxc", UDim2.new(1,0,1,0), UDim2.new(0,0,0,0),
     COLOR_ACCENT_H, Enum.Font.GothamBlack, 14, Enum.TextXAlignment.Center).ZIndex = 102
 
@@ -233,7 +214,7 @@ splashBarFill.Size = UDim2.new(0, 0, 1, 0)
 splashBarFill.ZIndex = 102
 splashBarFill.Parent = splashBarBg
 corner(splashBarFill, 4)
-applyGradient(splashBarFill, Color3.fromRGB(255, 40, 70), Color3.fromRGB(255, 130, 150), 0, Color3.fromRGB(220, 30, 60))
+applyGradient(splashBarFill, Color3.fromRGB(255, 40, 70), Color3.fromRGB(255, 130, 150), 0)
 
 local splashPercent = makeLabel(splash, "0%", UDim2.new(0.5,0,0,12),
     UDim2.new(0, 24, 0, 166), COLOR_MUTED, Enum.Font.GothamBold, 9)
@@ -278,9 +259,7 @@ local function setSplashProgress(p)
     end
 end
 
--- ============================================================
 -- MAIN UI
--- ============================================================
 local mainUi = Instance.new("Frame")
 mainUi.BackgroundColor3 = COLOR_BG
 mainUi.Size = UDim2.new(0, 540, 0, 330)
@@ -291,7 +270,7 @@ mainUi.Visible = false
 mainUi.ZIndex = 50
 mainUi.Parent = screenGui
 corner(mainUi, 16)
-applyGradient(mainUi, Color3.fromRGB(18, 8, 12), Color3.fromRGB(8, 8, 10), 135)
+applyGradient(mainUi, Color3.fromRGB(25, 10, 16), Color3.fromRGB(8, 8, 10), 135)
 
 local mainStroke = Instance.new("UIStroke")
 mainStroke.Thickness = 1.5
@@ -301,12 +280,12 @@ applyRedBorder(mainStroke)
 
 -- SIDEBAR
 local sidebar = Instance.new("Frame")
-sidebar.BackgroundColor3 = Color3.fromRGB(12, 12, 16)
+sidebar.BackgroundColor3 = Color3.fromRGB(12, 8, 14)
 sidebar.Size = UDim2.new(0, 145, 1, 0)
 sidebar.ZIndex = 51
 sidebar.Parent = mainUi
 corner(sidebar, 16)
-applyGradient(sidebar, Color3.fromRGB(35, 8, 16), Color3.fromRGB(12, 8, 14), 90)
+applyGradient(sidebar, Color3.fromRGB(40, 10, 20), Color3.fromRGB(12, 8, 14), 90)
 
 local sidebarMask = Instance.new("Frame")
 sidebarMask.BackgroundColor3 = Color3.fromRGB(12, 8, 14)
@@ -361,9 +340,9 @@ local function makeMenuItem(text, posY, icon)
         UDim2.new(0, 8, 0, 0), COLOR_MUTED, Enum.Font.GothamBold, 11)
     ico.ZIndex = 53
 
-    local l = makeLabel(row, text, UDim2.new(1, -30, 1, 0),
+    local lbl = makeLabel(row, text, UDim2.new(1, -30, 1, 0),
         UDim2.new(0, 28, 0, 0), COLOR_MUTED, Enum.Font.GothamMedium, 10)
-    l.ZIndex = 53
+    lbl.ZIndex = 53
 
     local function setActive(on)
         if on then
@@ -373,19 +352,19 @@ local function makeMenuItem(text, posY, icon)
                 applyGradient(row, Color3.fromRGB(240, 60, 90), Color3.fromRGB(160, 20, 40), 0)
             end
             ico.TextColor3 = COLOR_TEXT
-            l.TextColor3 = COLOR_TEXT
-            l.Font = Enum.Font.GothamBold
+            lbl.TextColor3 = COLOR_TEXT
+            lbl.Font = Enum.Font.GothamBold
         else
             row.BackgroundTransparency = 1
             local g = row:FindFirstChildOfClass("UIGradient")
             if g then g:Destroy() end
             ico.TextColor3 = COLOR_MUTED
-            l.TextColor3 = COLOR_MUTED
-            l.Font = Enum.Font.GothamMedium
+            lbl.TextColor3 = COLOR_MUTED
+            lbl.Font = Enum.Font.GothamMedium
         end
     end
 
-    return {row = row, lbl = l, ico = ico, setActive = setActive}
+    return {row = row, lbl = lbl, ico = ico, setActive = setActive}
 end
 
 local menuOverview = makeMenuItem("Overview", 64, "◈")
@@ -414,7 +393,7 @@ rescanBtn.Position = UDim2.new(0, 10, 1, -60)
 rescanBtn.ZIndex = 53
 rescanBtn.Parent = sidebar
 corner(rescanBtn, 7)
-applyGradient(rescanBtn, Color3.fromRGB(50, 15, 25), Color3.fromRGB(24, 18, 24), 0)
+applyGradient(rescanBtn, Color3.fromRGB(55, 15, 28), Color3.fromRGB(24, 18, 24), 0)
 
 -- MAIN PANEL
 local mainPanel = Instance.new("Frame")
@@ -449,7 +428,7 @@ pages.Position = UDim2.new(0, 12, 0, 42)
 pages.ZIndex = 52
 pages.Parent = mainPanel
 
--- PAGE OVERVIEW
+-- OVERVIEW PAGE
 local pageOverview = Instance.new("Frame")
 pageOverview.BackgroundTransparency = 1
 pageOverview.Size = UDim2.new(1, 0, 1, 0)
@@ -462,7 +441,7 @@ profileCard.Size = UDim2.new(1, 0, 0, 60)
 profileCard.ZIndex = 53
 profileCard.Parent = pageOverview
 corner(profileCard, 10)
-applyGradient(profileCard, Color3.fromRGB(35, 12, 20), Color3.fromRGB(16, 12, 16), 0)
+applyGradient(profileCard, Color3.fromRGB(38, 12, 20), Color3.fromRGB(16, 12, 16), 0)
 
 local pcStroke = Instance.new("UIStroke")
 pcStroke.Color = Color3.fromRGB(80, 30, 45)
@@ -503,7 +482,7 @@ card1.Position = UDim2.new(0, 0, 0, 68)
 card1.ZIndex = 53
 card1.Parent = pageOverview
 corner(card1, 10)
-applyGradient(card1, Color3.fromRGB(30, 10, 18), Color3.fromRGB(16, 12, 16), 0)
+applyGradient(card1, Color3.fromRGB(35, 12, 20), Color3.fromRGB(16, 12, 16), 0)
 
 makeLabel(card1, "Trial Access", UDim2.new(1,-16,0,14),
     UDim2.new(0, 12, 0, 6), COLOR_TEXT, Enum.Font.GothamBold, 10).ZIndex = 54
@@ -517,7 +496,7 @@ card2.Position = UDim2.new(0.5, 6, 0, 68)
 card2.ZIndex = 53
 card2.Parent = pageOverview
 corner(card2, 10)
-applyGradient(card2, Color3.fromRGB(30, 10, 18), Color3.fromRGB(16, 12, 16), 0)
+applyGradient(card2, Color3.fromRGB(35, 12, 20), Color3.fromRGB(16, 12, 16), 0)
 
 makeLabel(card2, "Studio Lite", UDim2.new(1,-16,0,14),
     UDim2.new(0, 12, 0, 6), COLOR_TEXT, Enum.Font.GothamBold, 10).ZIndex = 54
@@ -531,7 +510,7 @@ card3.Position = UDim2.new(0, 0, 0, 122)
 card3.ZIndex = 53
 card3.Parent = pageOverview
 corner(card3, 10)
-applyGradient(card3, Color3.fromRGB(35, 10, 16), Color3.fromRGB(16, 12, 16), 0)
+applyGradient(card3, Color3.fromRGB(40, 10, 18), Color3.fromRGB(16, 12, 16), 0)
 
 local c3Logo = Instance.new("Frame")
 c3Logo.BackgroundColor3 = COLOR_ACCENT
@@ -550,7 +529,7 @@ makeLabel(card3, "sadvze x cute", UDim2.new(1,-80,0,14),
 makeLabel(card3, "Developed by LO 🖤", UDim2.new(1,-80,0,12),
     UDim2.new(0, 50, 0, 24), COLOR_MUTED, Enum.Font.Gotham, 8).ZIndex = 54
 
--- PAGE PARSER
+-- PARSER PAGE
 local pageParser = Instance.new("Frame")
 pageParser.BackgroundTransparency = 1
 pageParser.Size = UDim2.new(1, 0, 1, 0)
@@ -576,7 +555,7 @@ local parserLayout = Instance.new("UIListLayout")
 parserLayout.Padding = UDim.new(0, 6)
 parserLayout.Parent = parserScroll
 
--- PAGE IMPORTER
+-- IMPORTER PAGE
 local pageImporter = Instance.new("Frame")
 pageImporter.BackgroundTransparency = 1
 pageImporter.Size = UDim2.new(1, 0, 1, 0)
@@ -607,13 +586,9 @@ local function switchPage(name, menu)
     pageOverview.Visible = (name == "ov")
     pageParser.Visible = (name == "pa")
     pageImporter.Visible = (name == "im")
-    if name == "ov" then
-        panelTitle.Text = "System Profile"
-    elseif name == "pa" then
-        panelTitle.Text = "Parser"
-    else
-        panelTitle.Text = "Importer"
-    end
+    if name == "ov" then panelTitle.Text = "System Profile"
+    elseif name == "pa" then panelTitle.Text = "Parser"
+    else panelTitle.Text = "Importer" end
     if menu then menu.setActive(true) end
 end
 
@@ -624,18 +599,10 @@ local function resetMenus()
     menuSettings.setActive(false)
 end
 
-menuOverview.row.MouseButton1Click:Connect(function()
-    resetMenus(); switchPage("ov", menuOverview)
-end)
-menuParser.row.MouseButton1Click:Connect(function()
-    resetMenus(); switchPage("pa", menuParser)
-end)
-menuImporter.row.MouseButton1Click:Connect(function()
-    resetMenus(); switchPage("im", menuImporter)
-end)
-menuSettings.row.MouseButton1Click:Connect(function()
-    resetMenus(); switchPage("ov", menuSettings)
-end)
+menuOverview.row.MouseButton1Click:Connect(function() resetMenus(); switchPage("ov", menuOverview) end)
+menuParser.row.MouseButton1Click:Connect(function() resetMenus(); switchPage("pa", menuParser) end)
+menuImporter.row.MouseButton1Click:Connect(function() resetMenus(); switchPage("im", menuImporter) end)
+menuSettings.row.MouseButton1Click:Connect(function() resetMenus(); switchPage("ov", menuSettings) end)
 
 -- FILE CARD
 local function makeFileCard(fileName, fileExt, filePath, parentFrame)
@@ -664,8 +631,7 @@ local function makeFileCard(fileName, fileExt, filePath, parentFrame)
     corner(badge, 4)
     applyGradient(badge,
         isRbxm and Color3.fromRGB(210, 80, 110) or Color3.fromRGB(240, 60, 90),
-        isRbxm and Color3.fromRGB(120, 25, 50) or Color3.fromRGB(140, 15, 35),
-        0)
+        isRbxm and Color3.fromRGB(120, 25, 50) or Color3.fromRGB(140, 15, 35), 0)
 
     local importBtn = Instance.new("TextButton")
     importBtn.Text = "IMPORT"
@@ -680,8 +646,7 @@ local function makeFileCard(fileName, fileExt, filePath, parentFrame)
     corner(importBtn, 4)
     applyGradient(importBtn,
         isRbxm and Color3.fromRGB(210, 80, 110) or Color3.fromRGB(240, 60, 90),
-        isRbxm and Color3.fromRGB(120, 25, 50) or Color3.fromRGB(140, 15, 35),
-        0)
+        isRbxm and Color3.fromRGB(120, 25, 50) or Color3.fromRGB(140, 15, 35), 0)
 
     makeLabel(card, fileName, UDim2.new(1,-80,0,12),
         UDim2.new(0, 8, 0, 26), COLOR_TEXT, Enum.Font.GothamBold, 8).ZIndex = 55
@@ -724,12 +689,8 @@ local function scanFiles()
     if scanning then return end
     scanning = true
 
-    for _, c in ipairs(parserScroll:GetChildren()) do
-        if c:IsA("Frame") then c:Destroy() end
-    end
-    for _, c in ipairs(importerScroll:GetChildren()) do
-        if c:IsA("Frame") then c:Destroy() end
-    end
+    for _, c in ipairs(parserScroll:GetChildren()) do if c:IsA("Frame") then c:Destroy() end end
+    for _, c in ipairs(importerScroll:GetChildren()) do if c:IsA("Frame") then c:Destroy() end end
 
     local files = {}
     for _, p in ipairs({"/sdcard/Download", "/sdcard/Documents", "/sdcard", "workspace", "", ".", "./"}) do
@@ -757,7 +718,7 @@ end
 
 rescanBtn.MouseButton1Click:Connect(scanFiles)
 
--- TRANSISI SPLASH → MAIN
+-- TRANSISI
 task.spawn(function()
     for i = 1, 20 do
         setSplashProgress(i / 20)
@@ -778,7 +739,6 @@ task.spawn(function()
 
     splash.Visible = false
     mainUi.Visible = true
-
     resetMenus()
     switchPage("ov", menuOverview)
     scanFiles()
