@@ -1,42 +1,59 @@
 --[[ ============================================================
-     ENI IMPORTER v3 — pola getcustomasset + getobjects
-     Adaptasi dari workflow ALLZ, UI versi ENI (ungu)
-     Jalan di Delta / executor Android / Studio Lite
+     SADVZE X CUTE — PREMIUM IMPORTER
+     Support .rbxm / .rbxmx / .rbxl / .rbxlx
+     Pola getcustomasset + getobjects (works di Delta)
      ============================================================ ]]
 
--- ============ SERVICE ============
-local CoreGui     = game:GetService("CoreGui")
-local RunService  = game:GetService("RunService")
-local Workspace   = game:GetService("Workspace")
-local Players     = game:GetService("Players")
+local CoreGui       = game:GetService("CoreGui")
+local RunService    = game:GetService("RunService")
+local TweenService  = game:GetService("TweenService")
+local Workspace     = game:GetService("Workspace")
+local Players       = game:GetService("Players")
 local InsertService = game:GetService("InsertService")
-local LocalPlayer = Players.LocalPlayer
+local Lighting      = game:GetService("Lighting")
+local LocalPlayer   = Players.LocalPlayer
 
 -- ============ EXECUTOR FUNCTION RESOLVER ============
-local getFiles    = listfiles or list_files or function() return {} end
-local getAsset    = getcustomasset or getsynasset or function() return "" end
-local readFileData= readfile or function() return nil end
+local getFiles     = listfiles or list_files or function() return {} end
+local getAsset     = getcustomasset or getsynasset or function() return "" end
+local readFileData = readfile or function() return nil end
 
-print("[ENI] getFiles  =", tostring(listfiles or list_files))
-print("[ENI] getAsset  =", tostring(getcustomasset or getsynasset))
-print("[ENI] readfile  =", tostring(readfile))
+print("[SADVZE] getFiles  =", tostring(listfiles or list_files))
+print("[SADVZE] getAsset  =", tostring(getcustomasset or getsynasset))
+print("[SADVZE] readfile  =", tostring(readfile))
 
--- ============ THEME ============
-local COLOR_BG        = Color3.fromRGB(11, 11, 16)
+-- ============ PREMIUM THEME ============
+local COLOR_BG        = Color3.fromRGB(10, 10, 15)
 local COLOR_SURFACE   = Color3.fromRGB(20, 20, 30)
-local COLOR_PURPLE    = Color3.fromRGB(140, 100, 255)
-local COLOR_PURPLE_H  = Color3.fromRGB(170, 140, 255)
-local COLOR_TEXT      = Color3.fromRGB(240, 240, 250)
+local COLOR_SURFACE_2 = Color3.fromRGB(28, 28, 42)
+local COLOR_ACCENT    = Color3.fromRGB(170, 120, 255)   -- ungu premium
+local COLOR_ACCENT_H  = Color3.fromRGB(210, 170, 255)
+local COLOR_GOLD      = Color3.fromRGB(255, 210, 120)
+local COLOR_TEXT      = Color3.fromRGB(245, 245, 250)
 local COLOR_MUTED     = Color3.fromRGB(130, 130, 150)
+local COLOR_RBXM      = Color3.fromRGB(140, 100, 255)
+local COLOR_RBXL      = Color3.fromRGB(80, 180, 255)
+local COLOR_SUCCESS   = Color3.fromRGB(90, 220, 140)
+local COLOR_DANGER    = Color3.fromRGB(230, 90, 90)
 
 local currentFilter = "ALL"
 
--- ============ HELPERS ============
+-- ============ UI HELPERS ============
 local function corner(inst, r)
     local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, r or 6)
+    c.CornerRadius = UDim.new(0, r or 8)
     c.Parent = inst
     return c
+end
+
+local function padding(inst, p)
+    local pad = Instance.new("UIPadding")
+    pad.PaddingTop    = UDim.new(0, p)
+    pad.PaddingBottom = UDim.new(0, p)
+    pad.PaddingLeft   = UDim.new(0, p)
+    pad.PaddingRight  = UDim.new(0, p)
+    pad.Parent = inst
+    return pad
 end
 
 local function makeLabel(parent, text, size, pos, color, font, textSize, xAlign)
@@ -53,22 +70,24 @@ local function makeLabel(parent, text, size, pos, color, font, textSize, xAlign)
     return lbl
 end
 
--- ============ VORTEX BORDER (versi ungu ENI) ============
-local function applyVortexBorder(target)
-    local gradient = Instance.new("UIGradient")
-    gradient.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0.00, Color3.fromRGB(160, 100, 255)),
-        ColorSequenceKeypoint.new(0.33, Color3.fromRGB(90, 60, 200)),
-        ColorSequenceKeypoint.new(0.66, Color3.fromRGB(200, 150, 255)),
-        ColorSequenceKeypoint.new(1.00, Color3.fromRGB(140, 80, 230)),
+-- ============ VORTEX GLOW BORDER ============
+local function applyVortexBorder(target, thickness)
+    local grad = Instance.new("UIGradient")
+    grad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0.00, Color3.fromRGB(255, 210, 120)),  -- gold
+        ColorSequenceKeypoint.new(0.25, Color3.fromRGB(170, 120, 255)),  -- purple
+        ColorSequenceKeypoint.new(0.50, Color3.fromRGB(80, 180, 255)),   -- blue
+        ColorSequenceKeypoint.new(0.75, Color3.fromRGB(170, 120, 255)),
+        ColorSequenceKeypoint.new(1.00, Color3.fromRGB(255, 210, 120)),
     })
-    gradient.Parent = target
+    grad.Parent = target
+    if thickness then target.Thickness = thickness end
     RunService.RenderStepped:Connect(function()
-        gradient.Rotation = (tick() * 50) % 360
+        grad.Rotation = (tick() * 40) % 360
     end)
 end
 
--- ============ PROCESS MODEL ============
+-- ============ PROCESS MODEL PARTS ============
 local function processModelParts(inst)
     if not inst then return end
     local function isRestricted(obj)
@@ -108,11 +127,10 @@ local function refreshScripts(model)
     end)
 end
 
--- ============ LOAD MODEL (pola ALLZ) ============
+-- ============ LOAD MODEL (rbxm + rbxl support) ============
 local function loadModelFile(filePath)
     local toInsert = {}
 
-    -- Coba via getobjects + getcustomasset
     local okGet, res = pcall(function()
         if getobjects then
             local assetPath = getAsset(filePath)
@@ -125,7 +143,6 @@ local function loadModelFile(filePath)
             table.insert(toInsert, obj)
         end
     else
-        -- Fallback: baca file, coba getAsset + InsertService
         local okRead, rawData = pcall(function() return readFileData(filePath) end)
         if okRead and rawData then
             local okAsset, assetId = pcall(function() return getAsset(filePath) end)
@@ -145,15 +162,15 @@ end
 
 -- ============ UI BUILD ============
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "ENIImporterPurpleGui"
+screenGui.Name = "SadvzeCuteImporter"
 screenGui.ResetOnSpawn = false
 
 pcall(function()
-    local existing = CoreGui:FindFirstChild("ENIImporterPurpleGui")
+    local existing = CoreGui:FindFirstChild("SadvzeCuteImporter")
     if existing then existing:Destroy() end
     local lpGui = LocalPlayer:FindFirstChild("PlayerGui")
-    if lpGui and lpGui:FindFirstChild("ENIImporterPurpleGui") then
-        lpGui.ENIImporterPurpleGui:Destroy()
+    if lpGui and lpGui:FindFirstChild("SadvzeCuteImporter") then
+        lpGui.SadvzeCuteImporter:Destroy()
     end
 end)
 
@@ -162,185 +179,432 @@ if not okParent or not screenGui.Parent then
     screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 end
 
+-- Background blur (premium touch)
+local blur = Instance.new("BlurEffect")
+blur.Size = 8
+blur.Parent = Lighting
+
 -- Floating toggle
 local toggleIcon = Instance.new("TextButton")
-toggleIcon.Name = "ENIToggle"
-toggleIcon.Size = UDim2.new(0, 42, 0, 42)
-toggleIcon.Position = UDim2.new(0, 15, 0.5, -21)
-toggleIcon.BackgroundColor3 = COLOR_PURPLE
-toggleIcon.Text = "ENI"
+toggleIcon.Name = "SadvzeToggle"
+toggleIcon.Size = UDim2.new(0, 46, 0, 46)
+toggleIcon.Position = UDim2.new(0, 15, 0.5, -23)
+toggleIcon.BackgroundColor3 = COLOR_ACCENT
+toggleIcon.Text = "sxc"
 toggleIcon.TextColor3 = COLOR_TEXT
 toggleIcon.Font = Enum.Font.GothamBold
-toggleIcon.TextSize = 11
+toggleIcon.TextSize = 12
 toggleIcon.Active = true
 toggleIcon.Draggable = true
 toggleIcon.Parent = screenGui
-corner(toggleIcon, 21)
+corner(toggleIcon, 23)
 
 local toggleStroke = Instance.new("UIStroke")
-toggleStroke.Color = Color3.fromRGB(80, 50, 160)
+toggleStroke.Color = COLOR_GOLD
 toggleStroke.Thickness = 1.5
+toggleStroke.Transparency = 0.3
 toggleStroke.Parent = toggleIcon
 
-toggleIcon.MouseEnter:Connect(function() toggleIcon.BackgroundColor3 = COLOR_PURPLE_H end)
-toggleIcon.MouseLeave:Connect(function() toggleIcon.BackgroundColor3 = COLOR_PURPLE end)
+toggleIcon.MouseEnter:Connect(function()
+    TweenService:Create(toggleIcon, TweenInfo.new(0.2), {
+        BackgroundColor3 = COLOR_ACCENT_H,
+        Size = UDim2.new(0, 50, 0, 50),
+        Position = UDim2.new(0, 13, 0.5, -25),
+    }):Play()
+end)
+toggleIcon.MouseLeave:Connect(function()
+    TweenService:Create(toggleIcon, TweenInfo.new(0.2), {
+        BackgroundColor3 = COLOR_ACCENT,
+        Size = UDim2.new(0, 46, 0, 46),
+        Position = UDim2.new(0, 15, 0.5, -23),
+    }):Play()
+end)
 
 -- Main frame
 local guiContainer = Instance.new("Frame")
 guiContainer.Name = "MainFrame"
 guiContainer.BackgroundColor3 = COLOR_BG
-guiContainer.Size = UDim2.new(0, 300, 0, 380)
-guiContainer.Position = UDim2.new(0.5, -150, 0.5, -190)
+guiContainer.Size = UDim2.new(0, 320, 0, 420)
+guiContainer.Position = UDim2.new(0.5, -160, 0.5, -210)
 guiContainer.Active = true
 guiContainer.Draggable = true
 guiContainer.Parent = screenGui
-corner(guiContainer, 10)
+corner(guiContainer, 14)
 
+-- Drop shadow (fake via layered frame)
+local shadow = Instance.new("Frame")
+shadow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+shadow.BackgroundTransparency = 0.55
+shadow.Size = UDim2.new(1, 8, 1, 8)
+shadow.Position = UDim2.new(0, -4, 0, 2)
+shadow.ZIndex = 0
+shadow.Parent = guiContainer
+corner(shadow, 16)
+guiContainer.ZIndex = 1
+
+-- Vortex border (premium)
 local mainStroke = Instance.new("UIStroke")
 mainStroke.Thickness = 2.5
+mainStroke.Transparency = 0.15
 mainStroke.Parent = guiContainer
 applyVortexBorder(mainStroke)
+
+-- ============ HEADER ============
+local header = Instance.new("Frame")
+header.BackgroundColor3 = COLOR_SURFACE
+header.Size = UDim2.new(1, 0, 0, 70)
+header.BorderSizePixel = 0
+header.ZIndex = 2
+header.Parent = guiContainer
+corner(header, 14)
+
+-- Cover bottom corner of header (so only top is rounded)
+local headerMask = Instance.new("Frame")
+headerMask.BackgroundColor3 = COLOR_SURFACE
+headerMask.BorderSizePixel = 0
+headerMask.Size = UDim2.new(1, 0, 0, 20)
+headerMask.Position = UDim2.new(0, 0, 1, -20)
+headerMask.ZIndex = 2
+headerMask.Parent = header
+
+-- Avatar circle
+local avatar = Instance.new("Frame")
+avatar.BackgroundColor3 = COLOR_ACCENT
+avatar.Size = UDim2.new(0, 44, 0, 44)
+avatar.Position = UDim2.new(0, 14, 0.5, -22)
+avatar.ZIndex = 3
+avatar.Parent = header
+corner(avatar, 22)
+
+local avatarStroke = Instance.new("UIStroke")
+avatarStroke.Color = COLOR_GOLD
+avatarStroke.Thickness = 1.5
+avatarStroke.Transparency = 0.2
+avatarStroke.Parent = avatar
+
+makeLabel(avatar, "s", UDim2.new(1, 0, 1, 0), UDim2.new(0, 0, 0, 0),
+    COLOR_TEXT, Enum.Font.GothamBlack, 20, Enum.TextXAlignment.Center).ZIndex = 4
+
+-- Header title with gradient
+local title = makeLabel(header, "sadvze x cute", UDim2.new(0.6, 0, 0, 22),
+    UDim2.new(0, 70, 0, 12), COLOR_TEXT, Enum.Font.GothamBlack, 16)
+title.ZIndex = 3
+
+local titleGrad = Instance.new("UIGradient")
+titleGrad.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0.0, Color3.fromRGB(255, 210, 120)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(170, 120, 255)),
+    ColorSequenceKeypoint.new(1.0, Color3.fromRGB(80, 180, 255)),
+})
+titleGrad.Parent = title
+
+makeLabel(header, "PREMIUM IMPORTER  •  rbxm / rbxl", UDim2.new(0.6, 0, 0, 14),
+    UDim2.new(0, 70, 0, 36), COLOR_MUTED, Enum.Font.Gotham, 9).ZIndex = 3
+
+-- Premium badge
+local premBadge = Instance.new("TextButton")
+premBadge.Text = "★ PREMIUM"
+premBadge.Font = Enum.Font.GothamBold
+premBadge.TextSize = 9
+premBadge.TextColor3 = COLOR_GOLD
+premBadge.BackgroundColor3 = Color3.fromRGB(35, 30, 20)
+premBadge.Size = UDim2.new(0, 96, 0, 24)
+premBadge.Position = UDim2.new(1, -110, 0, 14)
+premBadge.ZIndex = 3
+premBadge.AutoButtonColor = false
+premBadge.Parent = header
+corner(premBadge, 6)
+
+local premStroke = Instance.new("UIStroke")
+premStroke.Color = COLOR_GOLD
+premStroke.Thickness = 1
+premStroke.Transparency = 0.4
+premStroke.Parent = premBadge
+
+-- Close
+local closeBtn = Instance.new("TextButton")
+closeBtn.Text = "✕"
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 11
+closeBtn.TextColor3 = COLOR_TEXT
+closeBtn.BackgroundColor3 = COLOR_SURFACE_2
+closeBtn.Size = UDim2.new(0, 22, 0, 22)
+closeBtn.Position = UDim2.new(1, -28, 0, 42)
+closeBtn.ZIndex = 3
+closeBtn.Parent = header
+corner(closeBtn, 6)
+closeBtn.MouseEnter:Connect(function()
+    TweenService:Create(closeBtn, TweenInfo.new(0.15), {BackgroundColor3 = COLOR_DANGER}):Play()
+end)
+closeBtn.MouseLeave:Connect(function()
+    TweenService:Create(closeBtn, TweenInfo.new(0.15), {BackgroundColor3 = COLOR_SURFACE_2}):Play()
+end)
+closeBtn.MouseButton1Click:Connect(function() guiContainer.Visible = false end)
 
 toggleIcon.MouseButton1Click:Connect(function()
     guiContainer.Visible = not guiContainer.Visible
 end)
 
-makeLabel(guiContainer, "ENI // IMPORTER", UDim2.new(0.7, 0, 0, 20), UDim2.new(0, 14, 0, 12), COLOR_TEXT, Enum.Font.GothamBold, 11)
-
-local closeBtn = Instance.new("TextButton")
-closeBtn.Text = "✕"
-closeBtn.Font = Enum.Font.GothamBold
-closeBtn.TextSize = 10
-closeBtn.TextColor3 = COLOR_TEXT
-closeBtn.BackgroundColor3 = COLOR_PURPLE
-closeBtn.Size = UDim2.new(0, 20, 0, 20)
-closeBtn.Position = UDim2.new(1, -26, 0, 12)
-closeBtn.Parent = guiContainer
-corner(closeBtn, 5)
-closeBtn.MouseEnter:Connect(function() closeBtn.BackgroundColor3 = COLOR_PURPLE_H end)
-closeBtn.MouseLeave:Connect(function() closeBtn.BackgroundColor3 = COLOR_PURPLE end)
-closeBtn.MouseButton1Click:Connect(function() guiContainer.Visible = false end)
-
--- Search
+-- ============ SEARCH ============
 local searchBox = Instance.new("TextBox")
 searchBox.BackgroundColor3 = COLOR_SURFACE
-searchBox.PlaceholderText = "Cari file model..."
+searchBox.PlaceholderText = "🔍  Cari file model / place..."
 searchBox.Text = ""
 searchBox.Font = Enum.Font.Gotham
-searchBox.TextSize = 9
+searchBox.TextSize = 10
 searchBox.TextColor3 = COLOR_TEXT
 searchBox.PlaceholderColor3 = COLOR_MUTED
-searchBox.Size = UDim2.new(0, 272, 0, 28)
-searchBox.Position = UDim2.new(0, 14, 0, 42)
+searchBox.Size = UDim2.new(1, -28, 0, 32)
+searchBox.Position = UDim2.new(0, 14, 0, 82)
+searchBox.ZIndex = 2
 searchBox.Parent = guiContainer
-corner(searchBox, 6)
+corner(searchBox, 8)
 
--- Filter buttons
-local function createFilterBtn(text, posX, active)
+local searchStroke = Instance.new("UIStroke")
+searchStroke.Color = COLOR_SURFACE_2
+searchStroke.Thickness = 1
+searchStroke.Parent = searchBox
+searchBox.Focused:Connect(function()
+    TweenService:Create(searchStroke, TweenInfo.new(0.15), {Color = COLOR_ACCENT}):Play()
+end)
+searchBox.FocusLost:Connect(function()
+    TweenService:Create(searchStroke, TweenInfo.new(0.15), {Color = COLOR_SURFACE_2}):Play()
+end)
+
+-- ============ FILTERS ============
+local function createFilterBtn(text, posX, active, color)
     local btn = Instance.new("TextButton")
     btn.Text = text
     btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 8
+    btn.TextSize = 9
     btn.TextColor3 = COLOR_TEXT
-    btn.BackgroundColor3 = active and COLOR_PURPLE or COLOR_SURFACE
-    btn.Size = UDim2.new(0, 86, 0, 22)
-    btn.Position = UDim2.new(0, posX, 0, 78)
+    btn.BackgroundColor3 = active and color or COLOR_SURFACE
+    btn.Size = UDim2.new(0, 71, 0, 24)
+    btn.Position = UDim2.new(0, posX, 0, 122)
+    btn.ZIndex = 2
     btn.Parent = guiContainer
-    corner(btn, 5)
+    corner(btn, 6)
     return btn
 end
 
-local btnAll   = createFilterBtn("ALL",    14,  true)
-local btnRbxm  = createFilterBtn("RBXM",   104, false)
-local btnRbxmx = createFilterBtn("RBXMX",  194, false)
+local btnAll   = createFilterBtn("ALL",    14,  true,  COLOR_ACCENT)
+local btnRbxm  = createFilterBtn("RBXM",   89,  false, COLOR_RBXM)
+local btnRbxmx = createFilterBtn("RBXMX",  164, false, COLOR_RBXM)
+local btnRbxl  = createFilterBtn("RBXL",   239, false, COLOR_RBXL)
 
--- File list
+-- ============ FILE LIST ============
 local fileScroll = Instance.new("ScrollingFrame")
 fileScroll.BackgroundTransparency = 1
-fileScroll.Position = UDim2.new(0, 14, 0, 108)
-fileScroll.Size = UDim2.new(0, 272, 0, 196)
+fileScroll.Position = UDim2.new(0, 14, 0, 156)
+fileScroll.Size = UDim2.new(1, -28, 1, -222)
 fileScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 fileScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-fileScroll.ScrollBarThickness = 2
+fileScroll.ScrollBarThickness = 3
+fileScroll.ScrollBarImageColor3 = COLOR_ACCENT
+fileScroll.ZIndex = 2
 fileScroll.Parent = guiContainer
 
 local fileLayout = Instance.new("UIListLayout")
-fileLayout.Padding = UDim.new(0, 6)
+fileLayout.Padding = UDim.new(0, 8)
 fileLayout.Parent = fileScroll
 
--- Log panel
+-- ============ LOG PANEL ============
 local logContainer = Instance.new("Frame")
 logContainer.BackgroundColor3 = COLOR_SURFACE
-logContainer.Position = UDim2.new(0, 14, 0, 108)
-logContainer.Size = UDim2.new(0, 272, 0, 196)
+logContainer.Position = UDim2.new(0, 14, 0, 156)
+logContainer.Size = UDim2.new(1, -28, 1, -222)
 logContainer.Visible = false
+logContainer.ZIndex = 3
 logContainer.Parent = guiContainer
-corner(logContainer, 6)
+corner(logContainer, 10)
 
-makeLabel(logContainer, "LOG EKSEKUSI", UDim2.new(1, 0, 0, 18), UDim2.new(0, 10, 0, 8), COLOR_PURPLE, Enum.Font.GothamBold, 9)
+makeLabel(logContainer, "LOG EKSEKUSI", UDim2.new(1, -20, 0, 18),
+    UDim2.new(0, 12, 0, 10), COLOR_ACCENT, Enum.Font.GothamBold, 10)
 
 local logScroll = Instance.new("ScrollingFrame")
 logScroll.BackgroundTransparency = 1
-logScroll.Position = UDim2.new(0, 10, 0, 28)
-logScroll.Size = UDim2.new(0, 252, 0, 160)
+logScroll.Position = UDim2.new(0, 12, 0, 32)
+logScroll.Size = UDim2.new(1, -24, 1, -44)
 logScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 logScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 logScroll.ScrollBarThickness = 2
 logScroll.Parent = logContainer
 
 local logLayout = Instance.new("UIListLayout")
-logLayout.Padding = UDim.new(0, 4)
+logLayout.Padding = UDim.new(0, 5)
 logLayout.Parent = logScroll
 
 local function addLog(msg)
-    print("[ENI] " .. msg)
+    print("[SADVZE] " .. msg)
     local lbl = Instance.new("TextLabel")
     lbl.BackgroundTransparency = 1
     lbl.Size = UDim2.new(1, 0, 0, 14)
-    lbl.Text = "[ENI] " .. msg
+    lbl.Text = "> " .. msg
     lbl.Font = Enum.Font.Code
-    lbl.TextSize = 8
+    lbl.TextSize = 9
     lbl.TextColor3 = COLOR_TEXT
     lbl.TextXAlignment = Enum.TextXAlignment.Left
     lbl.TextWrapped = true
     lbl.Parent = logScroll
 end
 
--- Bottom controls
+-- ============ BOTTOM CONTROLS ============
 local refreshBtn = Instance.new("TextButton")
-refreshBtn.Text = "SCAN"
+refreshBtn.Text = "⟳  SCAN"
 refreshBtn.Font = Enum.Font.GothamBold
-refreshBtn.TextSize = 9
+refreshBtn.TextSize = 10
 refreshBtn.TextColor3 = COLOR_TEXT
-refreshBtn.BackgroundColor3 = COLOR_PURPLE
-refreshBtn.Size = UDim2.new(0, 131, 0, 26)
-refreshBtn.Position = UDim2.new(0, 14, 1, -34)
+refreshBtn.BackgroundColor3 = COLOR_ACCENT
+refreshBtn.Size = UDim2.new(0.5, -18, 0, 30)
+refreshBtn.Position = UDim2.new(0, 14, 1, -44)
+refreshBtn.ZIndex = 2
 refreshBtn.Parent = guiContainer
-corner(refreshBtn, 6)
-refreshBtn.MouseEnter:Connect(function() refreshBtn.BackgroundColor3 = COLOR_PURPLE_H end)
-refreshBtn.MouseLeave:Connect(function() refreshBtn.BackgroundColor3 = COLOR_PURPLE end)
+corner(refreshBtn, 8)
+refreshBtn.MouseEnter:Connect(function()
+    TweenService:Create(refreshBtn, TweenInfo.new(0.15), {BackgroundColor3 = COLOR_ACCENT_H}):Play()
+end)
+refreshBtn.MouseLeave:Connect(function()
+    TweenService:Create(refreshBtn, TweenInfo.new(0.15), {BackgroundColor3 = COLOR_ACCENT}):Play()
+end)
 
 local toggleLogBtn = Instance.new("TextButton")
-toggleLogBtn.Text = "LOGS"
+toggleLogBtn.Text = "📋  LOGS"
 toggleLogBtn.Font = Enum.Font.GothamBold
-toggleLogBtn.TextSize = 9
+toggleLogBtn.TextSize = 10
 toggleLogBtn.TextColor3 = COLOR_TEXT
-toggleLogBtn.BackgroundColor3 = COLOR_PURPLE
-toggleLogBtn.Size = UDim2.new(0, 131, 0, 26)
-toggleLogBtn.Position = UDim2.new(0, 155, 1, -34)
+toggleLogBtn.BackgroundColor3 = COLOR_SURFACE_2
+toggleLogBtn.Size = UDim2.new(0.5, -18, 0, 30)
+toggleLogBtn.Position = UDim2.new(0.5, 4, 1, -44)
+toggleLogBtn.ZIndex = 2
 toggleLogBtn.Parent = guiContainer
-corner(toggleLogBtn, 6)
-toggleLogBtn.MouseEnter:Connect(function() toggleLogBtn.BackgroundColor3 = COLOR_PURPLE_H end)
+corner(toggleLogBtn, 8)
+toggleLogBtn.MouseEnter:Connect(function()
+    TweenService:Create(toggleLogBtn, TweenInfo.new(0.15), {BackgroundColor3 = COLOR_ACCENT}):Play()
+end)
 toggleLogBtn.MouseLeave:Connect(function()
-    toggleLogBtn.BackgroundColor3 = logContainer.Visible and COLOR_PURPLE_H or COLOR_PURPLE
+    TweenService:Create(toggleLogBtn, TweenInfo.new(0.15), {
+        BackgroundColor3 = logContainer.Visible and COLOR_ACCENT or COLOR_SURFACE_2
+    }):Play()
 end)
 toggleLogBtn.MouseButton1Click:Connect(function()
     logContainer.Visible = not logContainer.Visible
-    toggleLogBtn.BackgroundColor3 = logContainer.Visible and COLOR_PURPLE_H or COLOR_PURPLE
+    toggleLogBtn.BackgroundColor3 = logContainer.Visible and COLOR_ACCENT or COLOR_SURFACE_2
 end)
 
--- ============ SCAN & RENDER ============
+-- ============ SCAN LOGIC ============
 local foundFiles = {}
+
+local function makeFileCard(fileName, fileExt, filePath)
+    local extColor = COLOR_RBXM
+    if fileExt == "rbxl" or fileExt == "rbxlx" then extColor = COLOR_RBXL end
+
+    local card = Instance.new("Frame")
+    card.BackgroundColor3 = COLOR_SURFACE
+    card.Size = UDim2.new(1, -4, 0, 62)
+    card.ZIndex = 2
+    card.Parent = fileScroll
+    corner(card, 10)
+
+    local cardStroke = Instance.new("UIStroke")
+    cardStroke.Color = COLOR_SURFACE_2
+    cardStroke.Thickness = 1
+    cardStroke.Parent = card
+
+    -- Extension badge
+    local badge = Instance.new("TextButton")
+    badge.Text = string.upper(fileExt)
+    badge.Font = Enum.Font.GothamBold
+    badge.TextSize = 8
+    badge.TextColor3 = COLOR_TEXT
+    badge.BackgroundColor3 = extColor
+    badge.Size = UDim2.new(0, 46, 0, 18)
+    badge.Position = UDim2.new(0, 10, 0, 8)
+    badge.ZIndex = 3
+    badge.AutoButtonColor = false
+    badge.Parent = card
+    corner(badge, 4)
+
+    -- Import button
+    local importBtn = Instance.new("TextButton")
+    importBtn.Text = "IMPORT"
+    importBtn.Font = Enum.Font.GothamBold
+    importBtn.TextSize = 8
+    importBtn.TextColor3 = COLOR_TEXT
+    importBtn.BackgroundColor3 = extColor
+    importBtn.Size = UDim2.new(0, 62, 0, 22)
+    importBtn.Position = UDim2.new(1, -72, 0, 8)
+    importBtn.ZIndex = 3
+    importBtn.Parent = card
+    corner(importBtn, 5)
+    importBtn.MouseEnter:Connect(function()
+        TweenService:Create(importBtn, TweenInfo.new(0.15), {
+            BackgroundColor3 = COLOR_ACCENT_H,
+        }):Play()
+    end)
+    importBtn.MouseLeave:Connect(function()
+        TweenService:Create(importBtn, TweenInfo.new(0.15), {
+            BackgroundColor3 = extColor,
+        }):Play()
+    end)
+
+    -- Name
+    local nameLbl = makeLabel(card, fileName, UDim2.new(1, -90, 0, 16),
+        UDim2.new(0, 10, 0, 30), COLOR_TEXT, Enum.Font.GothamBold, 10)
+    nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
+    nameLbl.ZIndex = 3
+
+    -- Path
+    local pathLbl = makeLabel(card, filePath, UDim2.new(1, -20, 0, 12),
+        UDim2.new(0, 10, 0, 46), COLOR_MUTED, Enum.Font.Code, 8)
+    pathLbl.TextTruncate = Enum.TextTruncate.AtEnd
+    pathLbl.ZIndex = 3
+
+    importBtn.MouseButton1Click:Connect(function()
+        importBtn.Text = "..."
+        addLog("Loading: " .. fileName)
+
+        local loaded = loadModelFile(filePath)
+        if loaded and #loaded > 0 then
+            for _, obj in ipairs(loaded) do
+                processModelParts(obj)
+
+                -- .rbxl/rbxlx sering balik sebagai DataModel-ish, parent ke Workspace aman
+                if obj:IsA("DataModel") then
+                    for _, child in ipairs(obj:GetChildren()) do
+                        if child.Name == "Workspace" then
+                            for _, wsChild in ipairs(child:GetChildren()) do
+                                wsChild.Parent = Workspace
+                            end
+                        end
+                    end
+                else
+                    obj.Parent = Workspace
+                    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                        local hrp = LocalPlayer.Character.HumanoidRootPart
+                        local spawnCFrame = hrp.CFrame + (hrp.CFrame.LookVector * 6)
+                        if obj:IsA("Model") and obj.PrimaryPart then
+                            obj:SetPrimaryPartCFrame(spawnCFrame)
+                        elseif obj:IsA("BasePart") then
+                            obj.CFrame = spawnCFrame
+                        end
+                    end
+                end
+
+                processModelParts(obj)
+                refreshScripts(obj)
+                addLog("OK: " .. tostring(obj.Name))
+            end
+            importBtn.Text = "✓ DONE"
+            importBtn.BackgroundColor3 = COLOR_SUCCESS
+        else
+            importBtn.Text = "✗ FAIL"
+            importBtn.BackgroundColor3 = COLOR_DANGER
+            addLog("Gagal load: " .. fileName)
+        end
+    end)
+
+    return card
+end
 
 local function scanWorkspaceFolder()
     for _, child in ipairs(fileScroll:GetChildren()) do
@@ -372,58 +636,12 @@ local function scanWorkspaceFolder()
     for _, filePath in ipairs(files) do
         local fileName = filePath:match("[^/\\]+$") or filePath
         local ext = fileName:match("%.([^%.]+)$")
-        if ext and (ext:lower() == "rbxm" or ext:lower() == "rbxmx") then
-            local fileExt = ext:lower()
-
-            local card = Instance.new("Frame")
-            card.BackgroundColor3 = COLOR_SURFACE
-            card.Size = UDim2.new(1, -4, 0, 36)
-            card.Parent = fileScroll
-            corner(card, 6)
-
-            makeLabel(card, fileName, UDim2.new(0.65, 0, 0, 14), UDim2.new(0, 10, 0, 6), COLOR_TEXT, Enum.Font.GothamBold, 8)
-            makeLabel(card, string.upper(fileExt), UDim2.new(0.65, 0, 0, 10), UDim2.new(0, 10, 0, 20), COLOR_MUTED, Enum.Font.Gotham, 7)
-
-            local insertBtn = Instance.new("TextButton")
-            insertBtn.Text = "IMPORT"
-            insertBtn.Font = Enum.Font.GothamBold
-            insertBtn.TextSize = 7
-            insertBtn.TextColor3 = COLOR_TEXT
-            insertBtn.BackgroundColor3 = COLOR_PURPLE
-            insertBtn.Size = UDim2.new(0, 58, 0, 20)
-            insertBtn.Position = UDim2.new(1, -64, 0.5, -10)
-            insertBtn.Parent = card
-            corner(insertBtn, 4)
-
-            insertBtn.MouseEnter:Connect(function() insertBtn.BackgroundColor3 = COLOR_PURPLE_H end)
-            insertBtn.MouseLeave:Connect(function() insertBtn.BackgroundColor3 = COLOR_PURPLE end)
-
-            insertBtn.MouseButton1Click:Connect(function()
-                addLog("Loading: " .. fileName)
-                local loaded = loadModelFile(filePath)
-                if loaded and #loaded > 0 then
-                    for _, obj in ipairs(loaded) do
-                        processModelParts(obj)
-                        obj.Parent = Workspace
-                        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                            local hrp = LocalPlayer.Character.HumanoidRootPart
-                            local spawnCFrame = hrp.CFrame + (hrp.CFrame.LookVector * 6)
-                            if obj:IsA("Model") and obj.PrimaryPart then
-                                obj:SetPrimaryPartCFrame(spawnCFrame)
-                            elseif obj:IsA("BasePart") then
-                                obj.CFrame = spawnCFrame
-                            end
-                        end
-                        processModelParts(obj)
-                        refreshScripts(obj)
-                        addLog("OK: " .. obj.Name)
-                    end
-                else
-                    addLog("Gagal load: " .. fileName)
-                end
-            end)
-
-            table.insert(foundFiles, {row = card, name = fileName, ext = fileExt})
+        if ext then
+            local e = ext:lower()
+            if e == "rbxm" or e == "rbxmx" or e == "rbxl" or e == "rbxlx" then
+                local card = makeFileCard(fileName, e, filePath)
+                table.insert(foundFiles, {row = card, name = fileName, ext = e})
+            end
         end
     end
 
@@ -432,14 +650,17 @@ end
 
 local function updateFilter(selected)
     currentFilter = selected
-    btnAll.BackgroundColor3   = (selected == "ALL")   and COLOR_PURPLE or COLOR_SURFACE
-    btnRbxm.BackgroundColor3  = (selected == "rbxm")  and COLOR_PURPLE or COLOR_SURFACE
-    btnRbxmx.BackgroundColor3 = (selected == "rbxmx") and COLOR_PURPLE or COLOR_SURFACE
+    btnAll.BackgroundColor3   = (selected == "ALL")   and COLOR_ACCENT or COLOR_SURFACE
+    btnRbxm.BackgroundColor3  = (selected == "rbxm")  and COLOR_RBXM   or COLOR_SURFACE
+    btnRbxmx.BackgroundColor3 = (selected == "rbxmx") and COLOR_RBXM   or COLOR_SURFACE
+    btnRbxl.BackgroundColor3  = (selected == "rbxl")  and COLOR_RBXL   or COLOR_SURFACE
 
     local query = searchBox.Text:lower()
     for _, item in ipairs(foundFiles) do
         local matchSearch = (query == "" or item.name:lower():find(query, 1, true) ~= nil)
-        local matchType   = (currentFilter == "ALL" or item.ext == currentFilter:lower())
+        local matchType = (currentFilter == "ALL")
+            or (currentFilter == "rbxl" and (item.ext == "rbxl" or item.ext == "rbxlx"))
+            or (item.ext == currentFilter)
         item.row.Visible = matchSearch and matchType
     end
 end
@@ -447,8 +668,9 @@ end
 btnAll.MouseButton1Click:Connect(function() updateFilter("ALL") end)
 btnRbxm.MouseButton1Click:Connect(function() updateFilter("rbxm") end)
 btnRbxmx.MouseButton1Click:Connect(function() updateFilter("rbxmx") end)
+btnRbxl.MouseButton1Click:Connect(function() updateFilter("rbxl") end)
 searchBox:GetPropertyChangedSignal("Text"):Connect(function() updateFilter(currentFilter) end)
 refreshBtn.MouseButton1Click:Connect(scanWorkspaceFolder)
 
-addLog("ENI Importer v3 loaded.")
+addLog("sadvze x cute importer loaded.")
 scanWorkspaceFolder()
