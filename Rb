@@ -1,6 +1,6 @@
 --[[ ============================================================
-     SADVZE X CUTE — PREMIUM IMPORTER + RBXL CONVERTER
-     Full UI + Vortex Border + RBXL → RBXM Converter
+     SADVZE X CUTE — PREMIUM IMPORTER
+     Full UI + Vortex Border + RBXL Converter v2
      ============================================================ ]]
 
 local CoreGui       = game:GetService("CoreGui")
@@ -11,11 +11,10 @@ local Players       = game:GetService("Players")
 local InsertService = game:GetService("InsertService")
 local LocalPlayer   = Players.LocalPlayer
 
-local getFiles     = listfiles or list_files or function() return {} end
-local getAsset     = getcustomasset or getsynasset or function() return "" end
-local readFileData = readfile or function() return nil end
-local writeFileData = writefile or function() end
-local makeFolder   = makefolder or function() end
+local getFiles      = listfiles or list_files or function() return {} end
+local getAsset      = getcustomasset or getsynasset or function() return "" end
+local readFileData  = readfile or function() return nil end
+local writeFileData = writefile or nil
 
 local COLOR_BG        = Color3.fromRGB(8, 8, 10)
 local COLOR_SURFACE   = Color3.fromRGB(16, 16, 20)
@@ -29,7 +28,6 @@ local COLOR_RBXM      = Color3.fromRGB(180, 60, 90)
 local COLOR_RBXL      = Color3.fromRGB(220, 40, 60)
 local COLOR_SUCCESS   = Color3.fromRGB(90, 220, 140)
 local COLOR_DANGER    = Color3.fromRGB(255, 60, 60)
-local COLOR_WARN      = Color3.fromRGB(240, 200, 80)
 
 local function corner(inst, r)
     local c = Instance.new("UICorner")
@@ -96,12 +94,11 @@ end
 local function processModelParts(inst)
     if not inst then return end
     if inst.ClassName == "DataModel" then
-        print("[SADVZE] DataModel — restoring services")
+        print("[SADVZE] DataModel detected")
         for _, svc in ipairs(inst:GetChildren()) do
-            local svcName = svc.ClassName
-            local targetSvc = game:FindFirstChild(svcName)
+            local targetSvc = game:FindFirstChild(svc.ClassName)
             if targetSvc and targetSvc ~= game then
-                print("[SADVZE] Restore service:", svcName)
+                print("[SADVZE] Restore:", svc.ClassName)
                 for _, child in ipairs(svc:GetChildren()) do
                     pcall(function() child.Parent = targetSvc end)
                 end
@@ -135,83 +132,105 @@ local function refreshScripts(model)
 end
 
 -- ============================================================
--- RBXL CONVERTER — trik rename .rbxl → .rbxm + retry load
+-- CONVERTER: .rbxl → .rbxm (multiple path fallback)
 -- ============================================================
 local function convertRbxlToRbxm(filePath)
     local raw = nil
     local okRead = pcall(function() raw = readFileData(filePath) end)
     if not okRead or not raw then
-        print("[CONV] Gagal baca file:", filePath)
+        print("[CONV] Gagal baca file")
         return nil
     end
 
-    print("[CONV] File size:", #raw, "bytes (", math.floor(#raw/1024), "KB )")
+    print("[CONV] Size:", #raw, "bytes (", math.floor(#raw/1024), "KB )")
 
     local magic = string.sub(raw, 1, 8)
-    local first100 = string.sub(raw, 1, 100)
     local isBinary = (magic == "<roblox!")
-    local isXml = (string.find(first100, "<roblox", 1, true) or string.find(first100, "<?xml", 1, true))
-
+    local isXml = (string.find(string.sub(raw,1,100), "<roblox", 1, true) ~= nil)
     print("[CONV] Format:", isBinary and "BINARY" or (isXml and "XML" or "UNKNOWN"))
 
-    -- Simpan sebagai .rbxm temporary
-    local tempPath = "/sdcard/Download/_sadvze_convert.rbxm"
-    local okWrite = pcall(function() writeFileData(tempPath, raw) end)
-    if not okWrite then
-        print("[CONV] Gagal nulis temp file")
+    if not writeFileData then
+        print("[CONV] writefile nggak ada")
         return nil
     end
-    print("[CONV] Temp file:", tempPath)
 
-    return tempPath
+    local paths = {
+        "sadvze_temp.rbxm",
+        "_sadvze_temp.rbxm",
+    }
+
+    for _, p in ipairs(paths) do
+        local okW, err = pcall(function() writeFileData(p, raw) end)
+        if okW then
+            print("[CONV] Written:", p)
+            return p
+        else
+            print("[CONV] Failed:", p, "→", tostring(err))
+        end
+    end
+
+    print("[CONV] Semua path gagal")
+    return nil
 end
 
+-- ============================================================
+-- LOAD: direct .rbxl dulu, baru convert, baru getobjects
+-- ============================================================
 local function loadModelFile(filePath)
     local toInsert = {}
-    local isRbxl = string.find(string.lower(filePath), "%.rbxl") or string.find(string.lower(filePath), "%.rbxlx")
+    local isRbxl = string.find(string.lower(filePath), "%.rbxl") ~= nil
 
-    local actualPath = filePath
+    print("[LOAD] Direct attempt:", filePath)
+    local okAsset, aid = pcall(function() return getAsset(filePath) end)
+    print("[LOAD] getAsset:", aid)
 
-    -- Kalau .rbxl / .rbxlx: convert dulu
+    -- Priority 1: direct InsertService pada .rbxl asli
+    if aid and aid ~= "" then
+        local okIns, resIns = pcall(function()
+            return InsertService:LoadLocalAsset(aid)
+        end)
+        if okIns and resIns then
+            print("[LOAD] InsertService (direct):", resIns.ClassName, resIns.Name, "children:", #resIns:GetChildren())
+            if resIns.ClassName ~= "TimerService" then
+                table.insert(toInsert, resIns)
+                return toInsert
+            end
+        end
+    end
+
+    -- Priority 2: convert kalau .rbxl
     if isRbxl then
         local converted = convertRbxlToRbxm(filePath)
         if converted then
-            actualPath = converted
+            local okA2, aid2 = pcall(function() return getAsset(converted) end)
+            if okA2 and aid2 and aid2 ~= "" then
+                local okI2, res2 = pcall(function()
+                    return InsertService:LoadLocalAsset(aid2)
+                end)
+                if okI2 and res2 then
+                    print("[LOAD] Via convert:", res2.ClassName, res2.Name, "children:", #res2:GetChildren())
+                    if res2.ClassName ~= "TimerService" then
+                        table.insert(toInsert, res2)
+                        return toInsert
+                    end
+                end
+            end
         end
     end
 
-    local assetId = ""
-    local okAsset, aid = pcall(function() return getAsset(actualPath) end)
-    if okAsset and aid and aid ~= "" then assetId = aid end
-    print("[LOAD] getAsset:", assetId)
-
-    -- Prioritas 1: InsertService
-    if assetId ~= "" then
-        local okIns, resIns = pcall(function()
-            return InsertService:LoadLocalAsset(assetId)
-        end)
-        if okIns and resIns then
-            print("[LOAD] InsertService:", resIns.ClassName, resIns.Name)
-            table.insert(toInsert, resIns)
-            return toInsert
-        end
-    end
-
-    -- Prioritas 2: getobjects
+    -- Priority 3: getobjects
     local okGet, res = pcall(function()
         if getobjects then
-            return getobjects(assetId ~= "" and assetId or actualPath)
+            return getobjects(aid ~= "" and aid or filePath)
         end
     end)
     if okGet and res and type(res) == "table" and #res > 0 then
         for _, obj in ipairs(res) do
-            print("[LOAD] getobjects:", obj.ClassName, obj.Name)
+            print("[LOAD] getobjects:", obj.ClassName, obj.Name, "children:", #obj:GetChildren())
             table.insert(toInsert, obj)
         end
-        return toInsert
     end
 
-    print("[LOAD] Semua method gagal")
     return toInsert
 end
 
@@ -230,7 +249,7 @@ if not okParent or not screenGui.Parent then
     screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 end
 
--- TOGGLE
+-- TOGGLE ICON
 local toggleIcon = Instance.new("TextButton")
 toggleIcon.Size = UDim2.new(0, 46, 0, 46)
 toggleIcon.Position = UDim2.new(0, 15, 0.5, -23)
@@ -313,7 +332,7 @@ applyGradient(splashBarFill, Color3.fromRGB(255, 40, 70), Color3.fromRGB(255, 13
 local splashPercent = makeLabel(splash, "0%", UDim2.new(0.5,0,0,12),
     UDim2.new(0, 24, 0, 166), COLOR_MUTED, Enum.Font.GothamBold, 9)
 
-local splashVersion = makeLabel(splash, "v1.0 PRO", UDim2.new(0.5,-24,0,12),
+local splashVersion = makeLabel(splash, "v2.0 PRO", UDim2.new(0.5,-24,0,12),
     UDim2.new(0.5,0,0,166), COLOR_MUTED, Enum.Font.GothamBold, 9, Enum.TextXAlignment.Right)
 
 local splashTabs = Instance.new("Frame")
@@ -406,7 +425,7 @@ makeLabel(sbLogo, "s", UDim2.new(1,0,1,0), UDim2.new(0,0,0,0),
 
 makeLabel(sidebar, "sadvze x cute", UDim2.new(1,-50,0,14),
     UDim2.new(0, 48, 0, 14), COLOR_TEXT, Enum.Font.GothamBold, 10).ZIndex = 52
-makeLabel(sidebar, "v1.0 PRO", UDim2.new(1,-50,0,12),
+makeLabel(sidebar, "v2.0 PRO", UDim2.new(1,-50,0,12),
     UDim2.new(0, 48, 0, 28), COLOR_MUTED, Enum.Font.Gotham, 8).ZIndex = 52
 
 local sbDiv = Instance.new("Frame")
@@ -704,21 +723,31 @@ local function makeFileCard(fileName, fileExt, filePath, parentFrame)
     importBtn.MouseButton1Click:Connect(function()
         importBtn.Text = "..."
         print("[SADVZE] ======== IMPORT ========")
-        print("[SADVZE] File:", fileName)
-        print("[SADVZE] Ext:", fileExt)
+        print("[SADVZE] File:", fileName, "Ext:", fileExt)
 
         local loaded = loadModelFile(filePath)
         print("[SADVZE] Loaded:", #loaded)
 
         if loaded and #loaded > 0 then
+            local inserted = false
             for _, obj in ipairs(loaded) do
                 print("[SADVZE]  obj:", obj.ClassName, obj.Name, "children:", #obj:GetChildren())
-                pcall(function() obj.Parent = Workspace end)
-                processModelParts(obj)
-                refreshScripts(obj)
+                if obj.ClassName == "TimerService" and #obj:GetChildren() == 0 then
+                    print("[SADVZE]  Skip empty TimerService")
+                else
+                    pcall(function() obj.Parent = Workspace end)
+                    processModelParts(obj)
+                    refreshScripts(obj)
+                    inserted = true
+                end
             end
-            importBtn.Text = "✓ DONE"
-            importBtn.BackgroundColor3 = COLOR_SUCCESS
+            if inserted then
+                importBtn.Text = "✓ DONE"
+                importBtn.BackgroundColor3 = COLOR_SUCCESS
+            else
+                importBtn.Text = "✗ EMPTY"
+                importBtn.BackgroundColor3 = COLOR_DANGER
+            end
         else
             importBtn.Text = "✗ FAIL"
             importBtn.BackgroundColor3 = COLOR_DANGER
